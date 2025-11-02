@@ -1,4 +1,4 @@
-const ZAMA_SDK_CDN_URL = "https://cdn.zama.ai/relayer-sdk-js/0.2.0/relayer-sdk-js.umd.cjs";
+const ZAMA_SDK_CDN_URL = "https://cdn.zama.org/relayer-sdk-js/0.2.0/relayer-sdk-js.umd.cjs";
 const SDK_LOAD_TIMEOUT = 30000;
 const RELAYER_SDK_GLOBAL_KEY = 'relayerSDK';
 
