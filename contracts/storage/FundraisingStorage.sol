@@ -15,10 +15,10 @@ abstract contract FundraisingStorage {
     mapping(uint16 => mapping(address => CommonStruct.Uint64ResultWithExp)) internal decryptedContributions;
 
     mapping(uint16 => CommonStruct.Uint64ResultWithExp) internal decryptedTotalRaised;
-    mapping(uint256 => uint16) internal decryptTotalRaisedRequest;
+    mapping(uint256 => uint16) internal decryptTotalRaisedRequest; // @deprecated v0.9 - no longer used in self-relaying pattern
     mapping(uint16 => CommonStruct.DecryptStatus) internal decryptTotalRaisedStatus;
 
-    mapping(uint256 => FundraisingStruct.DecryptUserContributionRequest) internal decryptMyContributionRequest;
+    mapping(uint256 => FundraisingStruct.DecryptUserContributionRequest) internal decryptMyContributionRequest; // @deprecated v0.9 - no longer used in self-relaying pattern
     mapping(uint16 => mapping(address => CommonStruct.DecryptStatus)) internal decryptMyContributionStatus;
 
     uint16 public campaignCount;

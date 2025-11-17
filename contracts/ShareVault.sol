@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import "@fhevm/solidity/lib/FHE.sol";
-import {SepoliaConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
+import {ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
 import "./interface/IDecryptionCallbacks.sol";
 import "./struct/CommonStruct.sol";
 import "./struct/ShareVaultStruct.sol";
@@ -34,7 +34,7 @@ import "./interface/impl/DecryptionCallback.sol";
  * @custom:security-contact tiennln.work@gmail.com
  */
 contract ShareVault is
-    SepoliaConfig,
+    ZamaEthereumConfig,
     IShareVaultEvents,
     IShareVaultErrors,
     ShareVaultStorage,
@@ -115,10 +115,10 @@ contract ShareVault is
     }
 
     /**
-     * @notice Requests decryption of the user's available balance
-     * @dev Calculates available balance as (total balance - total locked) and initiates
-     * an asynchronous decryption request. The result will be cached after the callback.
-     * Use getAvailableBalance() to retrieve the decrypted value.
+     * @notice Marks the user's available balance as publicly decryptable (v0.9 self-relaying)
+     * @dev Calculates available balance as (total balance - total locked) and marks it for decryption.
+     * After calling this, use the frontend relayer SDK's publicDecrypt() to get cleartext + proof,
+     * then call submitAvailableBalanceDecryption() with the results.
      * @custom:emits WithdrawalDecryptionRequested
      */
     function requestAvailableBalanceDecryption() external {
@@ -147,24 +147,55 @@ contract ShareVault is
         // Allow the contract to read the available balance for decryption
         FHE.allowThis(available);
 
-        // Request decryption
-        bytes32[] memory handles = new bytes32[](1);
-        handles[0] = FHE.toBytes32(available);
+        // Mark as publicly decryptable (v0.9 pattern)
+        FHE.makePubliclyDecryptable(available);
 
-        uint256 requestId = FHE.requestDecryption(
-            handles,
-            this.callbackDecryptAvailableBalance.selector
-        );
-
-        withdrawalRequests[requestId] = ShareVaultStruct.WithdrawalRequest({
-            userAddress: msg.sender
-        });
+        // Store the encrypted available balance for later verification
+        pendingAvailableBalance[msg.sender] = available;
 
         availableBalanceStatus[msg.sender] = CommonStruct
             .DecryptStatus
             .PROCESSING;
 
-        emit WithdrawalDecryptionRequested(msg.sender, requestId);
+        emit WithdrawalDecryptionRequested(msg.sender, 0);
+    }
+
+    /**
+     * @notice Submits and verifies the decrypted available balance (v0.9 self-relaying)
+     * @dev Called by the user after obtaining cleartext + proof via publicDecrypt() from the relayer SDK.
+     * Verifies the proof and caches the decrypted value.
+     * @param cleartextAvailable The decrypted available balance amount (obtained from publicDecrypt)
+     * @param proof The cryptographic proof (obtained from publicDecrypt)
+     */
+    function submitAvailableBalanceDecryption(
+        uint64 cleartextAvailable,
+        bytes calldata proof
+    ) external {
+        if (
+            availableBalanceStatus[msg.sender] !=
+            CommonStruct.DecryptStatus.PROCESSING
+        ) {
+            revert DecryptAlreadyInProgress();
+        }
+
+        euint64 available = pendingAvailableBalance[msg.sender];
+        if (!FHE.isInitialized(available)) {
+            revert NoBalance();
+        }
+
+        // Verify the decryption proof
+        bytes32[] memory handles = new bytes32[](1);
+        handles[0] = FHE.toBytes32(available);
+        bytes memory cleartexts = abi.encode(cleartextAvailable);
+        FHE.checkSignatures(handles, cleartexts, proof);
+
+        // Cache the decrypted value
+        decryptedAvailableBalance[msg.sender] = CommonStruct.Uint64ResultWithExp({
+            data: cleartextAvailable,
+            exp: block.timestamp + cacheTimeout
+        });
+
+        availableBalanceStatus[msg.sender] = CommonStruct.DecryptStatus.DECRYPTED;
     }
 
     /**

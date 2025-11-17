@@ -451,6 +451,52 @@ export const FUNDRAISING_ABI = [
     type: "function",
   },
   {
+    inputs: [
+      {
+        internalType: "uint16",
+        name: "campaignId",
+        type: "uint16",
+      },
+      {
+        internalType: "uint64",
+        name: "cleartextAmount",
+        type: "uint64",
+      },
+      {
+        internalType: "bytes",
+        name: "proof",
+        type: "bytes",
+      },
+    ],
+    name: "submitMyContributionDecryption",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint16",
+        name: "campaignId",
+        type: "uint16",
+      },
+      {
+        internalType: "uint64",
+        name: "cleartextTotal",
+        type: "uint64",
+      },
+      {
+        internalType: "bytes",
+        name: "proof",
+        type: "bytes",
+      },
+    ],
+    name: "submitTotalRaisedDecryption",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
     anonymous: false,
     inputs: [
       {

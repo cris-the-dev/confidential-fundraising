@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import "@fhevm/solidity/lib/FHE.sol";
-import {SepoliaConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
+import {ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
 import "./interface/IDecryptionCallbacks.sol";
 import "./interface/IFundraisingEvents.sol";
 import "./interface/IFundraisingErrors.sol";
@@ -32,7 +32,7 @@ import "./ShareVault.sol";
  * Note: Contribution amounts and targets are stored in wei, not ether units
  */
 contract ConfidentialFundraising is
-    SepoliaConfig,
+    ZamaEthereumConfig,
     IFundraisingEvents,
     IFundraisingErrors,
     FundraisingStorage,
@@ -410,11 +410,10 @@ contract ConfidentialFundraising is
     }
 
     /**
-     * @notice Requests decryption of the caller's contribution amount
-     * @dev Initiates an asynchronous decryption process. The result will be available after
-     * the decryption callback is executed. Use getMyContribution() to retrieve the decrypted value.
+     * @notice Marks the caller's contribution as publicly decryptable (v0.9 self-relaying)
+     * @dev After calling this, use the frontend relayer SDK's publicDecrypt() to get cleartext + proof,
+     * then call submitMyContributionDecryption() with the results to cache the decrypted value.
      * @param campaignId The ID of the campaign
-     * @custom:emits DecryptionRequested (via callback system)
      */
     function requestMyContributionDecryption(uint16 campaignId) public {
         euint64 userContribution = encryptedContributions[campaignId][
@@ -431,25 +430,57 @@ contract ConfidentialFundraising is
             revert DecryptAlreadyInProgress();
         }
 
-        bytes32[] memory handles = new bytes32[](1);
-        handles[0] = FHE.toBytes32(
-            encryptedContributions[campaignId][msg.sender]
-        );
-
-        uint256 requestId = FHE.requestDecryption(
-            handles,
-            IDecryptionCallbacks.callbackDecryptMyContribution.selector
-        );
-
-        decryptMyContributionRequest[requestId] = FundraisingStruct
-            .DecryptUserContributionRequest({
-                userAddress: msg.sender,
-                campaignId: campaignId
-            });
+        // Mark as publicly decryptable (v0.9 pattern)
+        FHE.makePubliclyDecryptable(userContribution);
 
         decryptMyContributionStatus[campaignId][msg.sender] = CommonStruct
             .DecryptStatus
             .PROCESSING;
+    }
+
+    /**
+     * @notice Submits and verifies the decrypted contribution amount (v0.9 self-relaying)
+     * @dev Called by the user after obtaining cleartext + proof via publicDecrypt() from the relayer SDK.
+     * Verifies the proof and caches the decrypted value.
+     * @param campaignId The ID of the campaign
+     * @param cleartextAmount The decrypted contribution amount (obtained from publicDecrypt)
+     * @param proof The cryptographic proof (obtained from publicDecrypt)
+     */
+    function submitMyContributionDecryption(
+        uint16 campaignId,
+        uint64 cleartextAmount,
+        bytes calldata proof
+    ) public {
+        euint64 userContribution = encryptedContributions[campaignId][
+            msg.sender
+        ];
+        if (!FHE.isInitialized(userContribution)) {
+            revert ContributionNotFound();
+        }
+
+        if (
+            decryptMyContributionStatus[campaignId][msg.sender] !=
+            CommonStruct.DecryptStatus.PROCESSING
+        ) {
+            revert DecryptAlreadyInProgress();
+        }
+
+        // Verify the decryption proof
+        bytes32[] memory handles = new bytes32[](1);
+        handles[0] = FHE.toBytes32(userContribution);
+        bytes memory cleartexts = abi.encode(cleartextAmount);
+        FHE.checkSignatures(handles, cleartexts, proof);
+
+        // Cache the decrypted value
+        decryptedContributions[campaignId][msg.sender] = CommonStruct
+            .Uint64ResultWithExp({
+                data: cleartextAmount,
+                exp: block.timestamp + cacheTimeout
+            });
+
+        decryptMyContributionStatus[campaignId][msg.sender] = CommonStruct
+            .DecryptStatus
+            .DECRYPTED;
     }
 
     /**
@@ -488,17 +519,16 @@ contract ConfidentialFundraising is
     }
 
     /**
-     * @notice Requests decryption of the total amount raised for a campaign
-     * @dev Only the campaign owner can request this. Required before finalizing a campaign.
-     * Initiates an asynchronous decryption process. Use getTotalRaised() to retrieve the result.
+     * @notice Marks the campaign's total raised as publicly decryptable (v0.9 self-relaying)
+     * @dev Only the campaign owner can request this. After calling this, use the frontend relayer SDK's
+     * publicDecrypt() to get cleartext + proof, then call submitTotalRaisedDecryption() with the results.
      * @param campaignId The ID of the campaign
-     * @custom:emits DecryptionRequested (via callback system)
      */
     function requestTotalRaisedDecryption(
         uint16 campaignId
     ) public onlyCampaignOwner(campaignId) {
         if (
-            decryptMyContributionStatus[campaignId][msg.sender] ==
+            decryptTotalRaisedStatus[campaignId] ==
             CommonStruct.DecryptStatus.PROCESSING
         ) {
             revert DecryptAlreadyInProgress();
@@ -506,18 +536,51 @@ contract ConfidentialFundraising is
 
         FundraisingStruct.Campaign storage campaign = campaigns[campaignId];
 
-        bytes32[] memory handles = new bytes32[](1);
-        handles[0] = FHE.toBytes32(campaign.totalRaised);
+        // Mark as publicly decryptable (v0.9 pattern)
+        FHE.makePubliclyDecryptable(campaign.totalRaised);
 
-        uint256 requestId = FHE.requestDecryption(
-            handles,
-            IDecryptionCallbacks.callbackDecryptTotalRaised.selector
-        );
-
-        decryptTotalRaisedRequest[requestId] = campaignId;
         decryptTotalRaisedStatus[campaignId] = CommonStruct
             .DecryptStatus
             .PROCESSING;
+    }
+
+    /**
+     * @notice Submits and verifies the decrypted total raised amount (v0.9 self-relaying)
+     * @dev Called by the campaign owner after obtaining cleartext + proof via publicDecrypt().
+     * Verifies the proof and caches the decrypted value.
+     * @param campaignId The ID of the campaign
+     * @param cleartextTotal The decrypted total raised amount (obtained from publicDecrypt)
+     * @param proof The cryptographic proof (obtained from publicDecrypt)
+     */
+    function submitTotalRaisedDecryption(
+        uint16 campaignId,
+        uint64 cleartextTotal,
+        bytes calldata proof
+    ) public onlyCampaignOwner(campaignId) {
+        if (
+            decryptTotalRaisedStatus[campaignId] !=
+            CommonStruct.DecryptStatus.PROCESSING
+        ) {
+            revert DecryptAlreadyInProgress();
+        }
+
+        FundraisingStruct.Campaign storage campaign = campaigns[campaignId];
+
+        // Verify the decryption proof
+        bytes32[] memory handles = new bytes32[](1);
+        handles[0] = FHE.toBytes32(campaign.totalRaised);
+        bytes memory cleartexts = abi.encode(cleartextTotal);
+        FHE.checkSignatures(handles, cleartexts, proof);
+
+        // Cache the decrypted value
+        decryptedTotalRaised[campaignId] = CommonStruct.Uint64ResultWithExp({
+            data: cleartextTotal,
+            exp: block.timestamp + cacheTimeout
+        });
+
+        decryptTotalRaisedStatus[campaignId] = CommonStruct
+            .DecryptStatus
+            .DECRYPTED;
     }
 
     /**

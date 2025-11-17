@@ -647,6 +647,24 @@ export const VAULT_ABI = [
   {
     inputs: [
       {
+        internalType: "uint64",
+        name: "cleartextAvailable",
+        type: "uint64",
+      },
+      {
+        internalType: "bytes",
+        name: "proof",
+        type: "bytes",
+      },
+    ],
+    name: "submitAvailableBalanceDecryption",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
         internalType: "address",
         name: "_campaignContract",
         type: "address",

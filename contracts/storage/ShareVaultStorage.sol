@@ -22,6 +22,9 @@ abstract contract ShareVaultStorage {
     mapping(uint256 => ShareVaultStruct.WithdrawalRequest)
         internal withdrawalRequests;
 
+    // Pending available balance for v0.9 self-relaying verification
+    mapping(address => euint64) internal pendingAvailableBalance;
+
     // Campaign contract address (authorized to lock/unlock)
     address public campaignContract;
 

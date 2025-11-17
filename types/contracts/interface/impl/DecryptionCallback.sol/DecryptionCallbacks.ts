@@ -8,7 +8,6 @@ import type {
   FunctionFragment,
   Result,
   Interface,
-  EventFragment,
   AddressLike,
   ContractRunner,
   ContractMethod,
@@ -18,7 +17,6 @@ import type {
   TypedContractEvent,
   TypedDeferredTopicFilter,
   TypedEventLog,
-  TypedLogDescription,
   TypedListener,
   TypedContractMethod,
 } from "../../../../common";
@@ -36,8 +34,6 @@ export interface DecryptionCallbacksInterface extends Interface {
       | "hasClaimed"
       | "hasClaimedTokens"
   ): FunctionFragment;
-
-  getEvent(nameOrSignatureOrTopic: "DecryptionFulfilled"): EventFragment;
 
   encodeFunctionData(
     functionFragment: "CACHE_TIMEOUT",
@@ -106,18 +102,6 @@ export interface DecryptionCallbacksInterface extends Interface {
     functionFragment: "hasClaimedTokens",
     data: BytesLike
   ): Result;
-}
-
-export namespace DecryptionFulfilledEvent {
-  export type InputTuple = [requestID: BigNumberish];
-  export type OutputTuple = [requestID: bigint];
-  export interface OutputObject {
-    requestID: bigint;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
 }
 
 export interface DecryptionCallbacks extends BaseContract {
@@ -329,24 +313,5 @@ export interface DecryptionCallbacks extends BaseContract {
     "view"
   >;
 
-  getEvent(
-    key: "DecryptionFulfilled"
-  ): TypedContractEvent<
-    DecryptionFulfilledEvent.InputTuple,
-    DecryptionFulfilledEvent.OutputTuple,
-    DecryptionFulfilledEvent.OutputObject
-  >;
-
-  filters: {
-    "DecryptionFulfilled(uint256)": TypedContractEvent<
-      DecryptionFulfilledEvent.InputTuple,
-      DecryptionFulfilledEvent.OutputTuple,
-      DecryptionFulfilledEvent.OutputObject
-    >;
-    DecryptionFulfilled: TypedContractEvent<
-      DecryptionFulfilledEvent.InputTuple,
-      DecryptionFulfilledEvent.OutputTuple,
-      DecryptionFulfilledEvent.OutputObject
-    >;
-  };
+  filters: {};
 }

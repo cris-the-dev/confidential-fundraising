@@ -33,6 +33,7 @@ export interface ShareVaultInterface extends Interface {
       | "campaignContract"
       | "campaignCount"
       | "campaigns"
+      | "confidentialProtocolId"
       | "deposit"
       | "getAvailableBalance"
       | "getAvailableBalanceStatus"
@@ -43,9 +44,9 @@ export interface ShareVaultInterface extends Interface {
       | "hasClaimedTokens"
       | "lockFunds"
       | "owner"
-      | "protocolId"
       | "requestAvailableBalanceDecryption"
       | "setCampaignContract"
+      | "submitAvailableBalanceDecryption"
       | "transferLockedFunds"
       | "unlockFunds"
       | "withdraw"
@@ -54,12 +55,12 @@ export interface ShareVaultInterface extends Interface {
   getEvent(
     nameOrSignatureOrTopic:
       | "AvailableBalanceDecrypted"
-      | "DecryptionFulfilled"
       | "Deposited"
       | "FundsLocked"
       | "FundsTransferred"
       | "FundsUnlocked"
       | "LockRequestInitiated"
+      | "PublicDecryptionVerified"
       | "WithdrawalDecryptionRequested"
       | "Withdrawn"
   ): EventFragment;
@@ -91,6 +92,10 @@ export interface ShareVaultInterface extends Interface {
   encodeFunctionData(
     functionFragment: "campaigns",
     values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "confidentialProtocolId",
+    values?: undefined
   ): string;
   encodeFunctionData(functionFragment: "deposit", values?: undefined): string;
   encodeFunctionData(
@@ -127,16 +132,16 @@ export interface ShareVaultInterface extends Interface {
   ): string;
   encodeFunctionData(functionFragment: "owner", values?: undefined): string;
   encodeFunctionData(
-    functionFragment: "protocolId",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
     functionFragment: "requestAvailableBalanceDecryption",
     values?: undefined
   ): string;
   encodeFunctionData(
     functionFragment: "setCampaignContract",
     values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "submitAvailableBalanceDecryption",
+    values: [BigNumberish, BytesLike]
   ): string;
   encodeFunctionData(
     functionFragment: "transferLockedFunds",
@@ -176,6 +181,10 @@ export interface ShareVaultInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "campaigns", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "confidentialProtocolId",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "deposit", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "getAvailableBalance",
@@ -204,13 +213,16 @@ export interface ShareVaultInterface extends Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "lockFunds", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
-  decodeFunctionResult(functionFragment: "protocolId", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "requestAvailableBalanceDecryption",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
     functionFragment: "setCampaignContract",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "submitAvailableBalanceDecryption",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -230,18 +242,6 @@ export namespace AvailableBalanceDecryptedEvent {
   export interface OutputObject {
     user: string;
     amount: bigint;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
-export namespace DecryptionFulfilledEvent {
-  export type InputTuple = [requestID: BigNumberish];
-  export type OutputTuple = [requestID: bigint];
-  export interface OutputObject {
-    requestID: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -321,6 +321,25 @@ export namespace LockRequestInitiatedEvent {
     user: string;
     campaignId: bigint;
     requestId: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace PublicDecryptionVerifiedEvent {
+  export type InputTuple = [
+    handlesList: BytesLike[],
+    abiEncodedCleartexts: BytesLike
+  ];
+  export type OutputTuple = [
+    handlesList: string[],
+    abiEncodedCleartexts: string
+  ];
+  export interface OutputObject {
+    handlesList: string[];
+    abiEncodedCleartexts: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -461,6 +480,8 @@ export interface ShareVault extends BaseContract {
     "view"
   >;
 
+  confidentialProtocolId: TypedContractMethod<[], [bigint], "view">;
+
   deposit: TypedContractMethod<[], [void], "payable">;
 
   getAvailableBalance: TypedContractMethod<[], [bigint], "view">;
@@ -507,8 +528,6 @@ export interface ShareVault extends BaseContract {
 
   owner: TypedContractMethod<[], [string], "view">;
 
-  protocolId: TypedContractMethod<[], [bigint], "view">;
-
   requestAvailableBalanceDecryption: TypedContractMethod<
     [],
     [void],
@@ -517,6 +536,12 @@ export interface ShareVault extends BaseContract {
 
   setCampaignContract: TypedContractMethod<
     [_campaignContract: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+
+  submitAvailableBalanceDecryption: TypedContractMethod<
+    [cleartextAvailable: BigNumberish, proof: BytesLike],
     [void],
     "nonpayable"
   >;
@@ -611,6 +636,9 @@ export interface ShareVault extends BaseContract {
     "view"
   >;
   getFunction(
+    nameOrSignature: "confidentialProtocolId"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
     nameOrSignature: "deposit"
   ): TypedContractMethod<[], [void], "payable">;
   getFunction(
@@ -667,15 +695,19 @@ export interface ShareVault extends BaseContract {
     nameOrSignature: "owner"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
-    nameOrSignature: "protocolId"
-  ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
     nameOrSignature: "requestAvailableBalanceDecryption"
   ): TypedContractMethod<[], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "setCampaignContract"
   ): TypedContractMethod<
     [_campaignContract: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "submitAvailableBalanceDecryption"
+  ): TypedContractMethod<
+    [cleartextAvailable: BigNumberish, proof: BytesLike],
     [void],
     "nonpayable"
   >;
@@ -703,13 +735,6 @@ export interface ShareVault extends BaseContract {
     AvailableBalanceDecryptedEvent.InputTuple,
     AvailableBalanceDecryptedEvent.OutputTuple,
     AvailableBalanceDecryptedEvent.OutputObject
-  >;
-  getEvent(
-    key: "DecryptionFulfilled"
-  ): TypedContractEvent<
-    DecryptionFulfilledEvent.InputTuple,
-    DecryptionFulfilledEvent.OutputTuple,
-    DecryptionFulfilledEvent.OutputObject
   >;
   getEvent(
     key: "Deposited"
@@ -747,6 +772,13 @@ export interface ShareVault extends BaseContract {
     LockRequestInitiatedEvent.OutputObject
   >;
   getEvent(
+    key: "PublicDecryptionVerified"
+  ): TypedContractEvent<
+    PublicDecryptionVerifiedEvent.InputTuple,
+    PublicDecryptionVerifiedEvent.OutputTuple,
+    PublicDecryptionVerifiedEvent.OutputObject
+  >;
+  getEvent(
     key: "WithdrawalDecryptionRequested"
   ): TypedContractEvent<
     WithdrawalDecryptionRequestedEvent.InputTuple,
@@ -771,17 +803,6 @@ export interface ShareVault extends BaseContract {
       AvailableBalanceDecryptedEvent.InputTuple,
       AvailableBalanceDecryptedEvent.OutputTuple,
       AvailableBalanceDecryptedEvent.OutputObject
-    >;
-
-    "DecryptionFulfilled(uint256)": TypedContractEvent<
-      DecryptionFulfilledEvent.InputTuple,
-      DecryptionFulfilledEvent.OutputTuple,
-      DecryptionFulfilledEvent.OutputObject
-    >;
-    DecryptionFulfilled: TypedContractEvent<
-      DecryptionFulfilledEvent.InputTuple,
-      DecryptionFulfilledEvent.OutputTuple,
-      DecryptionFulfilledEvent.OutputObject
     >;
 
     "Deposited(address,uint256)": TypedContractEvent<
@@ -837,6 +858,17 @@ export interface ShareVault extends BaseContract {
       LockRequestInitiatedEvent.InputTuple,
       LockRequestInitiatedEvent.OutputTuple,
       LockRequestInitiatedEvent.OutputObject
+    >;
+
+    "PublicDecryptionVerified(bytes32[],bytes)": TypedContractEvent<
+      PublicDecryptionVerifiedEvent.InputTuple,
+      PublicDecryptionVerifiedEvent.OutputTuple,
+      PublicDecryptionVerifiedEvent.OutputObject
+    >;
+    PublicDecryptionVerified: TypedContractEvent<
+      PublicDecryptionVerifiedEvent.InputTuple,
+      PublicDecryptionVerifiedEvent.OutputTuple,
+      PublicDecryptionVerifiedEvent.OutputObject
     >;
 
     "WithdrawalDecryptionRequested(address,uint256)": TypedContractEvent<

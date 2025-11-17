@@ -32,7 +32,8 @@
   },
   "devDependencies": {
     "@fhevm/core-contracts": "^0.8.0",
-    "@fhevm/solidity": "^0.8.0",
+    "@fhevm/solidity": "^0.9.1",
+    "@fhevm/hardhat-plugin": "^0.3.0-1",
     "@nomicfoundation/hardhat-chai-matchers": "^2.0.0",
     "@nomicfoundation/hardhat-ethers": "^3.0.0",
     "@nomicfoundation/hardhat-network-helpers": "^1.0.0",
@@ -54,7 +55,7 @@
     "typescript": ">=5.0.0"
   },
   "dependencies": {
-    "@zama-fhe/oracle-solidity": "^0.2.0",
+    "@zama-fhe/relayer-sdk": "^0.3.0-5",
     "dotenv": "^16.3.1"
   }
 }

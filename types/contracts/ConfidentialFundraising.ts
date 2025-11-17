@@ -35,6 +35,7 @@ export interface ConfidentialFundraisingInterface extends Interface {
       | "campaigns"
       | "cancelCampaign"
       | "claimTokens"
+      | "confidentialProtocolId"
       | "contribute"
       | "createCampaign"
       | "finalizeCampaign"
@@ -49,10 +50,11 @@ export interface ConfidentialFundraisingInterface extends Interface {
       | "hasClaimed"
       | "hasClaimedTokens"
       | "hasContribution"
-      | "protocolId"
       | "requestMyContributionDecryption"
       | "requestTotalRaisedDecryption"
       | "shareVault"
+      | "submitMyContributionDecryption"
+      | "submitTotalRaisedDecryption"
   ): FunctionFragment;
 
   getEvent(
@@ -62,7 +64,7 @@ export interface ConfidentialFundraisingInterface extends Interface {
       | "CampaignFailed"
       | "CampaignFinalized"
       | "ContributionMade"
-      | "DecryptionFulfilled"
+      | "PublicDecryptionVerified"
       | "TokensClaimed"
       | "TokensDistributed"
   ): EventFragment;
@@ -102,6 +104,10 @@ export interface ConfidentialFundraisingInterface extends Interface {
   encodeFunctionData(
     functionFragment: "claimTokens",
     values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "confidentialProtocolId",
+    values?: undefined
   ): string;
   encodeFunctionData(
     functionFragment: "contribute",
@@ -160,10 +166,6 @@ export interface ConfidentialFundraisingInterface extends Interface {
     values: [BigNumberish, AddressLike]
   ): string;
   encodeFunctionData(
-    functionFragment: "protocolId",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
     functionFragment: "requestMyContributionDecryption",
     values: [BigNumberish]
   ): string;
@@ -174,6 +176,14 @@ export interface ConfidentialFundraisingInterface extends Interface {
   encodeFunctionData(
     functionFragment: "shareVault",
     values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "submitMyContributionDecryption",
+    values: [BigNumberish, BigNumberish, BytesLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "submitTotalRaisedDecryption",
+    values: [BigNumberish, BigNumberish, BytesLike]
   ): string;
 
   decodeFunctionResult(
@@ -207,6 +217,10 @@ export interface ConfidentialFundraisingInterface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "claimTokens",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "confidentialProtocolId",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "contribute", data: BytesLike): Result;
@@ -259,7 +273,6 @@ export interface ConfidentialFundraisingInterface extends Interface {
     functionFragment: "hasContribution",
     data: BytesLike
   ): Result;
-  decodeFunctionResult(functionFragment: "protocolId", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "requestMyContributionDecryption",
     data: BytesLike
@@ -269,6 +282,14 @@ export interface ConfidentialFundraisingInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "shareVault", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "submitMyContributionDecryption",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "submitTotalRaisedDecryption",
+    data: BytesLike
+  ): Result;
 }
 
 export namespace CampaignCancelledEvent {
@@ -349,11 +370,18 @@ export namespace ContributionMadeEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export namespace DecryptionFulfilledEvent {
-  export type InputTuple = [requestID: BigNumberish];
-  export type OutputTuple = [requestID: bigint];
+export namespace PublicDecryptionVerifiedEvent {
+  export type InputTuple = [
+    handlesList: BytesLike[],
+    abiEncodedCleartexts: BytesLike
+  ];
+  export type OutputTuple = [
+    handlesList: string[],
+    abiEncodedCleartexts: string
+  ];
   export interface OutputObject {
-    requestID: bigint;
+    handlesList: string[];
+    abiEncodedCleartexts: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -515,6 +543,8 @@ export interface ConfidentialFundraising extends BaseContract {
     "nonpayable"
   >;
 
+  confidentialProtocolId: TypedContractMethod<[], [bigint], "view">;
+
   contribute: TypedContractMethod<
     [
       campaignId: BigNumberish,
@@ -631,8 +661,6 @@ export interface ConfidentialFundraising extends BaseContract {
     "view"
   >;
 
-  protocolId: TypedContractMethod<[], [bigint], "view">;
-
   requestMyContributionDecryption: TypedContractMethod<
     [campaignId: BigNumberish],
     [void],
@@ -646,6 +674,18 @@ export interface ConfidentialFundraising extends BaseContract {
   >;
 
   shareVault: TypedContractMethod<[], [string], "view">;
+
+  submitMyContributionDecryption: TypedContractMethod<
+    [campaignId: BigNumberish, cleartextAmount: BigNumberish, proof: BytesLike],
+    [void],
+    "nonpayable"
+  >;
+
+  submitTotalRaisedDecryption: TypedContractMethod<
+    [campaignId: BigNumberish, cleartextTotal: BigNumberish, proof: BytesLike],
+    [void],
+    "nonpayable"
+  >;
 
   getFunction<T extends ContractMethod = ContractMethod>(
     key: string | FunctionFragment
@@ -728,6 +768,9 @@ export interface ConfidentialFundraising extends BaseContract {
   getFunction(
     nameOrSignature: "claimTokens"
   ): TypedContractMethod<[campaignId: BigNumberish], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "confidentialProtocolId"
+  ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "contribute"
   ): TypedContractMethod<
@@ -843,9 +886,6 @@ export interface ConfidentialFundraising extends BaseContract {
     "view"
   >;
   getFunction(
-    nameOrSignature: "protocolId"
-  ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
     nameOrSignature: "requestMyContributionDecryption"
   ): TypedContractMethod<[campaignId: BigNumberish], [void], "nonpayable">;
   getFunction(
@@ -854,6 +894,20 @@ export interface ConfidentialFundraising extends BaseContract {
   getFunction(
     nameOrSignature: "shareVault"
   ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "submitMyContributionDecryption"
+  ): TypedContractMethod<
+    [campaignId: BigNumberish, cleartextAmount: BigNumberish, proof: BytesLike],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "submitTotalRaisedDecryption"
+  ): TypedContractMethod<
+    [campaignId: BigNumberish, cleartextTotal: BigNumberish, proof: BytesLike],
+    [void],
+    "nonpayable"
+  >;
 
   getEvent(
     key: "CampaignCancelled"
@@ -891,11 +945,11 @@ export interface ConfidentialFundraising extends BaseContract {
     ContributionMadeEvent.OutputObject
   >;
   getEvent(
-    key: "DecryptionFulfilled"
+    key: "PublicDecryptionVerified"
   ): TypedContractEvent<
-    DecryptionFulfilledEvent.InputTuple,
-    DecryptionFulfilledEvent.OutputTuple,
-    DecryptionFulfilledEvent.OutputObject
+    PublicDecryptionVerifiedEvent.InputTuple,
+    PublicDecryptionVerifiedEvent.OutputTuple,
+    PublicDecryptionVerifiedEvent.OutputObject
   >;
   getEvent(
     key: "TokensClaimed"
@@ -968,15 +1022,15 @@ export interface ConfidentialFundraising extends BaseContract {
       ContributionMadeEvent.OutputObject
     >;
 
-    "DecryptionFulfilled(uint256)": TypedContractEvent<
-      DecryptionFulfilledEvent.InputTuple,
-      DecryptionFulfilledEvent.OutputTuple,
-      DecryptionFulfilledEvent.OutputObject
+    "PublicDecryptionVerified(bytes32[],bytes)": TypedContractEvent<
+      PublicDecryptionVerifiedEvent.InputTuple,
+      PublicDecryptionVerifiedEvent.OutputTuple,
+      PublicDecryptionVerifiedEvent.OutputObject
     >;
-    DecryptionFulfilled: TypedContractEvent<
-      DecryptionFulfilledEvent.InputTuple,
-      DecryptionFulfilledEvent.OutputTuple,
-      DecryptionFulfilledEvent.OutputObject
+    PublicDecryptionVerified: TypedContractEvent<
+      PublicDecryptionVerifiedEvent.InputTuple,
+      PublicDecryptionVerifiedEvent.OutputTuple,
+      PublicDecryptionVerifiedEvent.OutputObject
     >;
 
     "TokensClaimed(uint256,address)": TypedContractEvent<
