@@ -134,7 +134,7 @@ export default function CampaignDetail() {
 
       // Step 2: If not decrypted, use the complete v0.9 self-relaying workflow
       if (status.status === DecryptStatus.NONE || (status.status === DecryptStatus.DECRYPTED && (status.contribution === 0n || statusCacheExp <= BigInt(currentTimeMillis)))) {
-        setClaimingStep('Step 1/4: Marking contribution as decryptable...');
+        setClaimingStep('Marking contribution as decryptable...');
 
         // This handles all 4 steps of v0.9 self-relaying:
         // 1. Mark as publicly decryptable

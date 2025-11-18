@@ -63,7 +63,7 @@ export function FinalizeCampaignModal({
 
       // Step 2: If not decrypted, use the complete v0.9 self-relaying workflow
       if (totalRaisedStatus.status === DecryptStatus.NONE || (totalRaisedStatus.status === DecryptStatus.DECRYPTED && totalRaisedStatus.totalRaised < 0n)) {
-        setFinalizingStep('Step 1/4: Marking total raised as decryptable...');
+        setFinalizingStep('Marking total raised as decryptable...');
 
         // This handles all 4 steps of v0.9 self-relaying:
         // 1. Mark as publicly decryptable

@@ -31,7 +31,7 @@ export function usePublicDecrypt() {
       }
 
       // Debug: Log available methods on instance
-      console.log("📊 Available instance methods:", Object.keys(instance).filter(k => typeof instance[k] === 'function'));
+      console.log("📊 Available instance methods:", Object.keys(instance).filter(k => typeof (instance as any)[k] === 'function'));
 
       if (!instance.publicDecrypt) {
         throw new Error("publicDecrypt method not available on FHEVM instance.");
@@ -59,7 +59,7 @@ export function usePublicDecrypt() {
       }
 
       // clearValues is an object with handle as key
-      const decryptedValue = clearValues[handle];
+      const decryptedValue = clearValues[handle as keyof typeof clearValues];
 
       if (decryptedValue === undefined || decryptedValue === null) {
         console.error("❌ clearValues object:", clearValues);

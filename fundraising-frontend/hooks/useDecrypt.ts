@@ -86,15 +86,14 @@ export const useDecrypt = () => {
           durationDays
         );
 
-        const decryptedValue = result[handle];
+        const decryptedValue = result[handle as keyof typeof result];
 
         console.log("✅ Decryption successful:", decryptedValue);
 
         return BigInt(decryptedValue);
       } catch (err) {
         console.error("❌ Decryption error:", err);
-        const errorMsg =
-          err instanceof Error ? err.message : "Decryption failed";
+        const errorMsg = err instanceof Error ? err.message : "Decryption failed";
         setError(errorMsg);
         throw new Error(errorMsg);
       } finally {

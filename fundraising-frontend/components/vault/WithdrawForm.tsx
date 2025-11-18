@@ -52,7 +52,7 @@ export function WithdrawForm({ availableBalance, onSuccess }: Props) {
 
       // Step 2: If not decrypted, use the complete v0.9 self-relaying workflow
       if (balanceStatus.status === DecryptStatus.NONE || (balanceStatus.status === DecryptStatus.DECRYPTED && (balanceStatus.availableAmount < 0n || statusCacheExp <= BigInt(currentTimeMillis)))) {
-        setWithdrawingStep('Step 1/4: Marking available balance as decryptable...');
+        setWithdrawingStep('Marking available balance as decryptable...');
 
         // This handles all 4 steps of v0.9 self-relaying:
         // 1. Mark as publicly decryptable
