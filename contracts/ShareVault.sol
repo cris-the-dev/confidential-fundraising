@@ -199,6 +199,19 @@ contract ShareVault is
     }
 
     /**
+     * @notice Get the encrypted handle for pending available balance decryption
+     * @dev Returns the handle that was marked as publicly decryptable for v0.9 self-relaying workflow
+     * @return The encrypted handle as bytes32
+     */
+    function getPendingAvailableBalanceHandle() external view returns (bytes32) {
+        euint64 pending = pendingAvailableBalance[msg.sender];
+        if (!FHE.isInitialized(pending)) {
+            revert NoBalance();
+        }
+        return FHE.toBytes32(pending);
+    }
+
+    /**
      * @notice Retrieves the user's decrypted available balance
      * @dev The balance must be decrypted first by calling requestAvailableBalanceDecryption().
      * Returns the cached decrypted value if not expired.

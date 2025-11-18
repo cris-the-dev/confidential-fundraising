@@ -1,7 +1,7 @@
 // components/vault/WithdrawForm.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { usePrivy } from '@privy-io/react-auth';
 import { useCampaigns } from '../../hooks/useCampaigns';
 import { DecryptStatus } from '../../types';
@@ -15,7 +15,7 @@ export function WithdrawForm({ availableBalance, onSuccess }: Props) {
   const {
     withdrawFromVault,
     getAvailableBalanceStatus,
-    requestAvailableBalanceDecryption,
+    completeAvailableBalanceDecryption, // v0.9 complete workflow
     loading
   } = useCampaigns();
   const { authenticated, login } = usePrivy();
@@ -23,53 +23,6 @@ export function WithdrawForm({ availableBalance, onSuccess }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [withdrawingStep, setWithdrawingStep] = useState<string>('');
-  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
-
-  // Cleanup polling on unmount
-  useEffect(() => {
-    return () => {
-      if (pollingInterval) {
-        clearInterval(pollingInterval);
-      }
-    };
-  }, [pollingInterval]);
-
-  const waitForAvailableBalanceDecryption = async (): Promise<boolean> => {
-    return new Promise((resolve, reject) => {
-      let attempts = 0;
-      const maxAttempts = 24; // 24 * 5 seconds = 2 minutes max
-
-      const interval = setInterval(async () => {
-        attempts++;
-
-        try {
-          const status = await getAvailableBalanceStatus();
-
-          const currentTimeMillis = Date.now();
-          const statusCacheExp = status.cacheExpiry;
-
-          if (status.status === DecryptStatus.DECRYPTED && status.availableAmount >= 0n && statusCacheExp > BigInt(currentTimeMillis)) {
-            clearInterval(interval);
-            setPollingInterval(null);
-            resolve(true);
-          } else if (attempts >= maxAttempts) {
-            clearInterval(interval);
-            setPollingInterval(null);
-            reject(new Error('Decryption timeout - please try again'));
-          }
-        } catch (err) {
-          console.error('Error checking available balance decryption status:', err);
-          if (attempts >= maxAttempts) {
-            clearInterval(interval);
-            setPollingInterval(null);
-            reject(err);
-          }
-        }
-      }, 5000); // Poll every 5 seconds
-
-      setPollingInterval(interval);
-    });
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,17 +50,23 @@ export function WithdrawForm({ availableBalance, onSuccess }: Props) {
       const currentTimeMillis = Date.now();
       const statusCacheExp = balanceStatus.cacheExpiry;
 
-      // Step 2: If not decrypted, request decryption
+      // Step 2: If not decrypted, use the complete v0.9 self-relaying workflow
       if (balanceStatus.status === DecryptStatus.NONE || (balanceStatus.status === DecryptStatus.DECRYPTED && (balanceStatus.availableAmount < 0n || statusCacheExp <= BigInt(currentTimeMillis)))) {
-        setWithdrawingStep('Available balance needs to be decrypted first...');
-        await requestAvailableBalanceDecryption();
+        setWithdrawingStep('Step 1/4: Marking available balance as decryptable...');
 
-        // Wait and poll for decryption to complete
-        setWithdrawingStep('Waiting for decryption (10-30 seconds)...');
-        await waitForAvailableBalanceDecryption();
+        // This handles all 4 steps of v0.9 self-relaying:
+        // 1. Mark as publicly decryptable
+        // 2. Get encrypted handle
+        // 3. Decrypt using relayer SDK
+        // 4. Submit proof to contract
+        const result = await completeAvailableBalanceDecryption();
+
+        console.log('✅ Available balance decrypted:', result.cleartext);
+        setWithdrawingStep('Decryption complete!');
       } else if (balanceStatus.status === DecryptStatus.PROCESSING) {
-        setWithdrawingStep('Decryption already in progress, waiting...');
-        await waitForAvailableBalanceDecryption();
+        // If it's already processing, complete the workflow
+        setWithdrawingStep('Completing decryption workflow...');
+        await completeAvailableBalanceDecryption();
       }
 
       // Step 3: Withdraw from vault
@@ -127,7 +86,7 @@ export function WithdrawForm({ availableBalance, onSuccess }: Props) {
       let errorMessage = err.message || 'Failed to withdraw. Please try again.';
 
       if (err.message?.includes('MustDecryptFirst')) {
-        errorMessage = 'Please decrypt your available balance first';
+        errorMessage = 'Unable to decrypt available balance. Please try again.';
       } else if (err.message?.includes('DecryptionProcessing')) {
         errorMessage = 'Balance decryption is still processing. Please wait...';
       } else if (err.message?.includes('DecryptionCacheExpired')) {
@@ -140,12 +99,6 @@ export function WithdrawForm({ availableBalance, onSuccess }: Props) {
 
       setError(errorMessage);
       setWithdrawingStep('');
-
-      // Cleanup polling
-      if (pollingInterval) {
-        clearInterval(pollingInterval);
-        setPollingInterval(null);
-      }
     }
   };
 
@@ -198,8 +151,8 @@ export function WithdrawForm({ availableBalance, onSuccess }: Props) {
           </label>
           <input
             type="number"
-            step="0.001"
-            min="0.001"
+            step="0.0001"
+            min="0.0001"
             max="18"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
@@ -265,7 +218,7 @@ export function WithdrawForm({ availableBalance, onSuccess }: Props) {
         </button>
         {!withdrawingStep && !loading && (
           <p className="text-xs text-gray-500 text-center">
-            💡 Available balance will be automatically decrypted if needed
+            💡 Balance automatically decrypted when needed
           </p>
         )}
       </form>

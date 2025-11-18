@@ -22,60 +22,13 @@ export function FinalizeCampaignModal({
   const {
     finalizeCampaign,
     getTotalRaisedStatus,
-    requestTotalRaisedDecryption,
+    completeTotalRaisedDecryption, // v0.9 complete workflow
     loading
   } = useCampaigns();
   const [tokenName, setTokenName] = useState('');
   const [tokenSymbol, setTokenSymbol] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [finalizingStep, setFinalizingStep] = useState<string>('');
-  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
-
-  // Cleanup polling on unmount
-  useEffect(() => {
-    return () => {
-      if (pollingInterval) {
-        clearInterval(pollingInterval);
-      }
-    };
-  }, [pollingInterval]);
-
-  const waitForTotalRaisedDecryption = async (): Promise<boolean> => {
-    return new Promise((resolve, reject) => {
-      let attempts = 0;
-      const maxAttempts = 24; // 24 * 5 seconds = 2 minutes max
-
-      const interval = setInterval(async () => {
-        attempts++;
-
-        try {
-          const status = await getTotalRaisedStatus(campaignId);
-
-          const currentTimeMillis = Date.now();
-          const statusCacheExp = status.cacheExpiry;
-
-          if (status.status === DecryptStatus.DECRYPTED && status.totalRaised >= 0n && statusCacheExp > BigInt(currentTimeMillis)) {
-            clearInterval(interval);
-            setPollingInterval(null);
-            resolve(true);
-          } else if (attempts >= maxAttempts) {
-            clearInterval(interval);
-            setPollingInterval(null);
-            reject(new Error('Decryption timeout - please try again'));
-          }
-        } catch (err) {
-          console.error('Error checking total raised decryption status:', err);
-          if (attempts >= maxAttempts) {
-            clearInterval(interval);
-            setPollingInterval(null);
-            reject(err);
-          }
-        }
-      }, 5000); // Poll every 5 seconds
-
-      setPollingInterval(interval);
-    });
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,17 +61,23 @@ export function FinalizeCampaignModal({
       setFinalizingStep('Checking total raised status...');
       const totalRaisedStatus = await getTotalRaisedStatus(campaignId);
 
-      // Step 2: If not decrypted, request decryption
+      // Step 2: If not decrypted, use the complete v0.9 self-relaying workflow
       if (totalRaisedStatus.status === DecryptStatus.NONE || (totalRaisedStatus.status === DecryptStatus.DECRYPTED && totalRaisedStatus.totalRaised < 0n)) {
-        setFinalizingStep('Total raised needs to be decrypted first...');
-        await requestTotalRaisedDecryption(campaignId);
+        setFinalizingStep('Step 1/4: Marking total raised as decryptable...');
 
-        // Wait and poll for decryption to complete
-        setFinalizingStep('Waiting for decryption (10-30 seconds)...');
-        await waitForTotalRaisedDecryption();
+        // This handles all 4 steps of v0.9 self-relaying:
+        // 1. Mark as publicly decryptable
+        // 2. Get encrypted handle
+        // 3. Decrypt using relayer SDK
+        // 4. Submit proof to contract
+        const result = await completeTotalRaisedDecryption(campaignId);
+
+        console.log('✅ Total raised decrypted:', result.cleartext);
+        setFinalizingStep('Decryption complete!');
       } else if (totalRaisedStatus.status === DecryptStatus.PROCESSING) {
-        setFinalizingStep('Decryption already in progress, waiting...');
-        await waitForTotalRaisedDecryption();
+        // If it's already processing, complete the workflow
+        setFinalizingStep('Completing decryption workflow...');
+        await completeTotalRaisedDecryption(campaignId);
       }
 
       // Step 3: Finalize campaign
@@ -145,12 +104,6 @@ export function FinalizeCampaignModal({
 
       setError(errorMessage);
       setFinalizingStep('');
-
-      // Cleanup polling
-      if (pollingInterval) {
-        clearInterval(pollingInterval);
-        setPollingInterval(null);
-      }
     }
   };
 
@@ -160,10 +113,6 @@ export function FinalizeCampaignModal({
       setTokenSymbol('');
       setError(null);
       setFinalizingStep('');
-      if (pollingInterval) {
-        clearInterval(pollingInterval);
-        setPollingInterval(null);
-      }
       onClose();
     }
   };
@@ -248,15 +197,16 @@ export function FinalizeCampaignModal({
           )}
 
           {/* Warning */}
-          <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
             <div className="flex gap-3">
-              <span className="text-yellow-600 flex-shrink-0">⚠️</span>
-              <div className="text-sm text-yellow-800">
-                <p className="font-medium mb-1">Important:</p>
-                <ul className="list-disc list-inside space-y-1">
-                  <li>Total raised will be automatically decrypted if needed</li>
-                  <li>If target is reached, contributors will receive tokens</li>
-                  <li>If target is not reached, funds will be unlocked (campaign fails)</li>
+              <span className="text-blue-600 flex-shrink-0">ℹ️</span>
+              <div className="text-sm text-blue-800">
+                <p className="font-medium mb-1">How it works:</p>
+                <ul className="list-disc list-inside space-y-1 text-xs">
+                  <li>Total raised amount will be decrypted</li>
+                  <li>Your wallet will sign the decryption request</li>
+                  <li>The proof will be submitted and verified on-chain</li>
+                  <li>If target is reached, contributors receive tokens</li>
                   <li>This action cannot be undone</li>
                 </ul>
               </div>
@@ -365,7 +315,7 @@ export function FinalizeCampaignModal({
             </div>
             {!finalizingStep && (
               <p className="text-xs text-gray-500 text-center">
-                💡 Total raised will be automatically decrypted if needed
+                💡 Fast and secure decryption powered by FHE
               </p>
             )}
           </form>

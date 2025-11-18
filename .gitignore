@@ -45,4 +45,4 @@ pnpm-debug.log*
 # pnpm-lock.yaml
 
 # Misc
-.cache/
+.cache/flattened/

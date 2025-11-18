@@ -24,8 +24,9 @@ The Confidential Fundraising Platform revolutionizes crowdfunding by combining b
 - **🪙 Token Rewards**: Successful campaigns distribute ERC20 tokens proportionally to contributors
 - **💰 Automatic Refunds**: Failed campaigns automatically refund contributors
 - **🔐 Secure Escrow**: ShareVault contract manages all funds with encrypted balance tracking
-- **⚡ Client-Side Decryption**: Instant decryption without waiting for blockchain callbacks
+- **⚡ Self-Relaying Decryption**: Instant decryption with cryptographic proofs (FHEVM v0.9)
 - **🎭 Zero-Knowledge**: Campaign totals remain private until authorized decryption
+- **🚀 User-Controlled**: Contributors sign and submit their own decryption requests
 
 ---
 
@@ -72,31 +73,52 @@ config:
   theme: neutral
 ---
 
-graph LR
+graph TB
     subgraph "📤 Encryption Process"
-        A[Plain Value<br/>e.g., 100 ETH] --> B[FHEVM SDK<br/>Encrypt]
+        A[Plain Value<br/>e.g., 100 ETH] --> B[FHEVM SDK<br/>createEncryptedInput]
         B --> C[Encrypted Value<br/>euint64]
         B --> D[Proof<br/>ZK Proof]
-        C --> E[Smart Contract]
+        C --> E[Smart Contract<br/>Store On-Chain]
         D --> E
     end
 
-    subgraph "📥 Decryption Process"
-        F[Smart Contract] --> G[getEncrypted...<br/>Read Function]
-        G --> H[Encrypted Value]
-        H --> I[FHEVM SDK<br/>Client-Side Decrypt]
-        I --> J[Verify Permissions]
-        J --> K[Plain Value<br/>100 ETH]
+    subgraph "📥 Self-Relaying Decryption Process"
+        F[User Request] --> G[1. Mark as Publicly<br/>Decryptable]
+        G --> H[Smart Contract<br/>FHE.makePubliclyDecryptable]
+        H --> I[2. Get Encrypted<br/>Handle]
+        I --> J[3. Relayer SDK<br/>publicDecrypt]
+        J --> K[Cleartext +<br/>Proof]
+        K --> L[4. Submit Proof<br/>to Contract]
+        L --> M[Smart Contract<br/>FHE.checkSignatures]
+        M --> N[✅ Verified<br/>Decryption]
     end
 
     E -.Stored On-Chain.-> F
 
     style A fill:#ffcccc,stroke:#333,stroke-width:2px
-    style K fill:#ccffcc,stroke:#333,stroke-width:2px
+    style N fill:#ccffcc,stroke:#333,stroke-width:2px
     style E fill:#cce5ff,stroke:#333,stroke-width:2px
-    style F fill:#cce5ff,stroke:#333,stroke-width:2px
-    style I fill:#ffd700,stroke:#333,stroke-width:3px
+    style H fill:#cce5ff,stroke:#333,stroke-width:2px
+    style J fill:#ffd700,stroke:#333,stroke-width:3px
+    style M fill:#ff9966,stroke:#333,stroke-width:2px
 ```
+
+#### Decryption Workflow Details
+
+The platform uses **FHEVM v0.9 self-relaying decryption** for secure and instant value decryption:
+
+**4-Step Self-Relaying Process:**
+
+1. **Mark as Decryptable**: Contract marks the encrypted value as publicly decryptable using `FHE.makePubliclyDecryptable()`
+2. **Get Handle**: Frontend retrieves the encrypted handle from the contract
+3. **Decrypt**: Relayer SDK's `publicDecrypt()` decrypts the value and generates a cryptographic proof
+4. **Submit Proof**: Frontend submits the cleartext and proof back to the contract for verification via `FHE.checkSignatures()`
+
+**Benefits over Oracle-based decryption:**
+- ⚡ **Instant**: No waiting for gateway callbacks (10-30 seconds)
+- 🔐 **Secure**: Cryptographic proofs prevent tampering
+- 👤 **User-controlled**: Users trigger and sign decryption requests
+- 💰 **Cost-effective**: No reliance on third-party oracle services
 
 ---
 
@@ -120,8 +142,8 @@ Ensure you have the following installed:
 #### Smart Contracts
 - **Solidity**: 0.8.24
 - **FHEVM Core Contracts**: ^0.8.0
-- **FHEVM Solidity Library**: ^0.8.0
-- **Zama Oracle SDK**: ^0.2.0
+- **FHEVM Solidity**: ^0.9.1 (Self-relaying decryption)
+- **FHEVM Hardhat Plugin**: ^0.3.0-1
 - **Hardhat**: Development environment
 - **TypeChain**: Type-safe contract interactions
 - **Ethers v6**: Web3 library
@@ -133,7 +155,7 @@ Ensure you have the following installed:
 - **Viem**: ^2.21.53 (Ethereum client)
 - **Ethers**: ^6.13.4 (Provider/Signer)
 - **Privy**: ^3.0.1 (Wallet authentication)
-- **Zama FHEVM Relayer SDK**: ^0.2.0 (Encryption/Decryption)
+- **Zama FHEVM Relayer SDK**: ^0.3.0-5 (Encryption/Decryption)
 - **Tailwind CSS**: ^3.4.17 (Styling)
 
 ### Installation
@@ -284,6 +306,10 @@ NEXT_PUBLIC_CHAIN_ID=11155111
 | `contribute` | `campaignId`, `encryptedAmount`, `proof` | Contribute to campaign | Public |
 | `finalizeCampaign` | `campaignId`, `tokenName`, `tokenSymbol` | Finalize after deadline | Owner only |
 | `claimTokens` | `campaignId` | Claim reward tokens | Contributors |
+| `requestMyContributionDecryption` | `campaignId` | Mark contribution as decryptable | Contributor |
+| `submitMyContributionDecryption` | `campaignId`, `cleartext`, `proof` | Submit decryption proof | Contributor |
+| `requestTotalRaisedDecryption` | `campaignId` | Mark total as decryptable | Owner only |
+| `submitTotalRaisedDecryption` | `campaignId`, `cleartext`, `proof` | Submit total decryption proof | Owner only |
 | `getEncryptedContribution` | `campaignId`, `user` | Get encrypted contribution | Public (read) |
 | `getEncryptedTotalRaised` | `campaignId` | Get encrypted campaign total | Public (read) |
 
@@ -313,6 +339,9 @@ NEXT_PUBLIC_CHAIN_ID=11155111
 | `lockFunds` | `user`, `campaignId`, `encryptedAmount` | Lock funds for campaign | Campaign contract |
 | `transferLockedFunds` | `recipient`, `campaignId` | Transfer locked funds | Campaign contract |
 | `unlockFunds` | `campaignId` | Unlock funds (refund) | Campaign contract |
+| `requestAvailableBalanceDecryption` | - | Mark balance as decryptable | User |
+| `submitAvailableBalanceDecryption` | `cleartext`, `proof` | Submit balance decryption proof | User |
+| `getPendingAvailableBalanceHandle` | - | Get pending decryption handle | Public (read) |
 | `getEncryptedBalance` | `user` | Get encrypted balance | Public (read) |
 | `getEncryptedBalanceAndLocked` | `user` | Get balance + total locked | Public (read) |
 | `getEncryptedTotalLocked` | `user` | Get total locked amount | Public (read) |
@@ -388,12 +417,92 @@ NEXT_PUBLIC_CHAIN_ID=11155111
 - **Locked Funds Isolation**: Per-campaign fund locks prevent double-spending
 - **Cache Expiration**: 10-minute timeout on decrypted values
 - **Max Supply Enforcement**: Token minting capped at 1 billion
+- **Cryptographic Proofs**: FHE.checkSignatures validates all decryptions
+
+---
+
+## 🛠️ Development Tools
+
+### Flatten Contracts for Remix IDE
+
+If you need to deploy contracts using Remix IDE, use the flatten script:
+
+```bash
+# Run from project root
+./scripts/flatten-contracts.sh
+```
+
+This creates flattened versions in the `flattened/` directory:
+- `ConfidentialFundraising_flat.sol`
+- `ShareVault_flat.sol`
+
+**Note**: Remove duplicate SPDX license identifiers if Remix shows warnings.
+
+### Configure ShareVault After Deployment
+
+After deploying both contracts, you must configure the ShareVault to recognize the ConfidentialFundraising contract:
+
+```bash
+VAULT_ADDRESS=0x... CAMPAIGN_ADDRESS=0x... npx hardhat run scripts/configure-vault.ts --network sepolia
+```
+
+This prevents the `OnlyCampaignContract()` error when users try to contribute.
+
+---
+
+## 🔄 FHEVM v0.9 Migration
+
+This project has been upgraded to **FHEVM v0.9** with self-relaying decryption. Key changes include:
+
+### Smart Contract Changes
+
+**Removed (Deprecated):**
+- `FHE.requestDecryption()` - Oracle-based decryption
+- `FHE.loadRequestedHandles()` - Handle loading for callbacks
+- Oracle callback functions - Replaced with submit functions
+
+**Added (Self-Relaying):**
+- `FHE.makePubliclyDecryptable()` - Marks values for public decryption
+- `FHE.checkSignatures()` - Verifies decryption proofs (updated signature)
+- `request*Decryption()` - Mark values as decryptable
+- `submit*Decryption()` - Submit cleartext + proof for verification
+
+### Frontend Changes
+
+**Package Updates:**
+- `@fhevm/solidity`: ^0.8.0 → ^0.9.1
+- `@zama-fhe/relayer-sdk`: ^0.2.0 → ^0.3.0-5
+- Removed: `@zama-fhe/oracle-solidity` (deprecated)
+
+**New Workflow:**
+```typescript
+// 1. Mark as decryptable
+await requestMyContributionDecryption(campaignId);
+
+// 2. Get encrypted handle
+const handle = await getEncryptedContribution(campaignId, userAddress);
+
+// 3. Decrypt with proof generation
+const { cleartext, proof } = await instance.publicDecrypt([handle]);
+
+// 4. Submit proof to contract
+await submitMyContributionDecryption(campaignId, cleartext, proof);
+```
+
+**Benefits:**
+- ⚡ **10-30x faster** - No waiting for gateway callbacks
+- 🔐 **More secure** - User-controlled decryption with cryptographic proofs
+- 💰 **Lower cost** - No oracle transaction fees
+
+For detailed migration steps, see `MIGRATION_v0.9_INSTRUCTIONS.md` and `FRONTEND_INTEGRATION_GUIDE.md`.
 
 ---
 
 ## 📚 Additional Resources
 
-- **FHEVM Documentation**: https://docs.zama.ai/fhevm
+- **FHEVM Documentation**: https://docs.zama.org/protocol
+- **FHEVM v0.9 Migration Guide**: https://docs.zama.org/protocol/solidity-guides/development-guide/migration
+- **Relayer SDK Guides**: https://docs.zama.org/protocol/relayer-sdk-guides
 - **Hardhat Documentation**: https://hardhat.org/docs
 - **Next.js Documentation**: https://nextjs.org/docs
 - **Privy Documentation**: https://docs.privy.io

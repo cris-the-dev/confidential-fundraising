@@ -1,5 +1,3 @@
-// app/campaigns/[id]/page.tsx - Update the owner actions section
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -13,6 +11,7 @@ import { ViewMyContribution } from '../../../components/campaign/ViewMyContribut
 import ContributeForm from '../../../components/campaign/ContributionForm';
 import { FinalizeCampaignModal } from '../../../components/campaign/FinalizeCampaignModal';
 import { CampaignTokenBalance } from '../../../components/campaign/CampaignTokenBalance';
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog';
 
 export default function CampaignDetail() {
   const params = useParams();
@@ -23,7 +22,7 @@ export default function CampaignDetail() {
     claimTokens,
     getCampaign,
     getContributionStatus,
-    requestMyContributionDecryption,
+    completeMyContributionDecryption, // v0.9 complete workflow
     checkHasClaimed,
     loading
   } = useCampaigns();
@@ -35,11 +34,12 @@ export default function CampaignDetail() {
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
   const [isClaimingProcess, setIsClaimingProcess] = useState(false);
   const [claimingStep, setClaimingStep] = useState<string>('');
-  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
   const [tokenBalanceKey, setTokenBalanceKey] = useState(0); // Key to force re-render token balance
   const [contributionKey, setContributionKey] = useState(0); // Key to force re-render contribution
   const [hasClaimed, setHasClaimed] = useState(false);
   const [checkingClaimStatus, setCheckingClaimStatus] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   const campaignId = parseInt(params.id as string);
 
@@ -94,31 +94,25 @@ export default function CampaignDetail() {
     loadCampaign();
   };
 
-  const handleCancel = async () => {
-    if (!confirm('Are you sure you want to cancel this campaign? All locked funds will be returned to contributors.')) {
-      return;
-    }
+  const handleCancelClick = () => {
+    setShowCancelDialog(true);
+  };
 
+  const handleCancelConfirm = async () => {
+    setIsCancelling(true);
     try {
       setError(null);
       setActionSuccess(null);
       await cancelCampaign(campaignId);
       setActionSuccess('Campaign cancelled successfully! All funds have been unlocked.');
+      setShowCancelDialog(false);
       await loadCampaign();
-
     } catch (err: any) {
       setError(err.message || 'Failed to cancel campaign');
+    } finally {
+      setIsCancelling(false);
     }
   };
-
-  // Cleanup polling on unmount
-  useEffect(() => {
-    return () => {
-      if (pollingInterval) {
-        clearInterval(pollingInterval);
-      }
-    };
-  }, [pollingInterval]);
 
   const handleClaim = async () => {
     if (!authenticated || !user?.wallet?.address) {
@@ -138,26 +132,31 @@ export default function CampaignDetail() {
       const currentTimeMillis = Date.now();
       const statusCacheExp = status.cacheExpiry;
 
-      // Step 2: If not decrypted, request decryption
+      // Step 2: If not decrypted, use the complete v0.9 self-relaying workflow
       if (status.status === DecryptStatus.NONE || (status.status === DecryptStatus.DECRYPTED && (status.contribution === 0n || statusCacheExp <= BigInt(currentTimeMillis)))) {
-        setClaimingStep('Your contribution needs to be decrypted first...');
-        await requestMyContributionDecryption(campaignId);
+        setClaimingStep('Step 1/4: Marking contribution as decryptable...');
 
-        // Wait and poll for decryption to complete
-        setClaimingStep('Waiting for decryption (10-30 seconds)...');
+        // This handles all 4 steps of v0.9 self-relaying:
+        // 1. Mark as publicly decryptable
+        // 2. Get encrypted handle
+        // 3. Decrypt using relayer SDK
+        // 4. Submit proof to contract
+        const result = await completeMyContributionDecryption(campaignId);
 
-        const decryptedData = await waitForDecryption(campaignId, user.wallet.address);
+        console.log('✅ Contribution decrypted:', result.cleartext);
 
-        if (!decryptedData || decryptedData.contribution === 0n) {
-          throw new Error('Unable to decrypt contribution or contribution is 0');
+        if (result.cleartext === 0n) {
+          throw new Error('Contribution amount is 0');
         }
+
+        setClaimingStep('Decryption complete!');
       } else if (status.status === DecryptStatus.PROCESSING) {
-        setClaimingStep('Decryption already in progress, waiting...');
+        // If it's already processing, complete the workflow
+        setClaimingStep('Completing decryption workflow...');
+        const result = await completeMyContributionDecryption(campaignId);
 
-        const decryptedData = await waitForDecryption(campaignId, user.wallet.address);
-
-        if (!decryptedData || decryptedData.contribution === 0n) {
-          throw new Error('Unable to decrypt contribution or contribution is 0');
+        if (result.cleartext === 0n) {
+          throw new Error('Contribution amount is 0');
         }
       }
 
@@ -179,60 +178,21 @@ export default function CampaignDetail() {
 
       let errorMessage = err.message || 'Failed to claim tokens';
 
-      if (err.message?.includes('ContributionNotDecrypted')) {
-        errorMessage = 'Your contribution needs to be decrypted first. Please try again.';
+      if (err.message?.includes('ContributionNotDecrypted') || err.message?.includes('Unable to decrypt')) {
+        errorMessage = 'Unable to decrypt contribution. Please try again.';
       } else if (err.message?.includes('AlreadyClaimed')) {
         errorMessage = 'You have already claimed your tokens.';
       } else if (err.message?.includes('NoTokensToClaim')) {
         errorMessage = 'No tokens available to claim (campaign may have failed).';
+      } else if (err.message?.includes('Contribution amount is 0')) {
+        errorMessage = 'No contribution found to claim tokens for.';
       }
 
       setError(errorMessage);
       setClaimingStep('');
     } finally {
       setIsClaimingProcess(false);
-      if (pollingInterval) {
-        clearInterval(pollingInterval);
-        setPollingInterval(null);
-      }
     }
-  };
-
-  const waitForDecryption = async (
-    campaignId: number,
-    userAddress: string
-  ): Promise<{ contribution: bigint } | null> => {
-    return new Promise((resolve, reject) => {
-      let attempts = 0;
-      const maxAttempts = 24; // 24 * 5 seconds = 2 minutes max
-
-      const interval = setInterval(async () => {
-        attempts++;
-
-        try {
-          const status = await getContributionStatus(campaignId, userAddress);
-
-          if (status.status === DecryptStatus.DECRYPTED && status.contribution > 0n) {
-            clearInterval(interval);
-            setPollingInterval(null);
-            resolve({ contribution: status.contribution });
-          } else if (attempts >= maxAttempts) {
-            clearInterval(interval);
-            setPollingInterval(null);
-            reject(new Error('Decryption timeout - please try again'));
-          }
-        } catch (err) {
-          console.error('Error checking decryption status:', err);
-          if (attempts >= maxAttempts) {
-            clearInterval(interval);
-            setPollingInterval(null);
-            reject(err);
-          }
-        }
-      }, 5000); // Poll every 5 seconds to match ViewMyContribution and avoid rate limits
-
-      setPollingInterval(interval);
-    });
   };
 
   if (loadingCampaign) {
@@ -431,7 +391,7 @@ export default function CampaignDetail() {
 
                   {canCancel && (
                     <button
-                      onClick={handleCancel}
+                      onClick={handleCancelClick}
                       disabled={loading}
                       className="w-full bg-red-600 text-white py-3 rounded-lg hover:bg-red-700 transition font-medium disabled:opacity-50"
                     >
@@ -616,6 +576,33 @@ export default function CampaignDetail() {
         isOpen={showFinalizeModal}
         onClose={() => setShowFinalizeModal(false)}
         onSuccess={handleFinalizeSuccess}
+      />
+
+      {/* Cancel Campaign Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showCancelDialog}
+        onClose={() => setShowCancelDialog(false)}
+        onConfirm={handleCancelConfirm}
+        title="Cancel Campaign?"
+        message={
+          <div className="space-y-3">
+            <p className="text-gray-700">
+              Are you sure you want to cancel this campaign?
+            </p>
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+              <p className="text-sm text-yellow-800 font-medium">
+                ⚡ All locked funds will be returned to contributors
+              </p>
+            </div>
+            <p className="text-sm text-gray-600">
+              This action cannot be undone.
+            </p>
+          </div>
+        }
+        confirmText="Yes, Cancel Campaign"
+        cancelText="No, Keep Campaign"
+        variant="danger"
+        isLoading={isCancelling}
       />
     </>
   );

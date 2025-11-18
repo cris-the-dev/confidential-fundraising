@@ -40,6 +40,7 @@ export interface ShareVaultInterface extends Interface {
       | "getEncryptedBalance"
       | "getEncryptedBalanceAndLocked"
       | "getEncryptedTotalLocked"
+      | "getPendingAvailableBalanceHandle"
       | "hasClaimed"
       | "hasClaimedTokens"
       | "lockFunds"
@@ -116,6 +117,10 @@ export interface ShareVaultInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "getEncryptedTotalLocked",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getPendingAvailableBalanceHandle",
     values?: undefined
   ): string;
   encodeFunctionData(
@@ -204,6 +209,10 @@ export interface ShareVaultInterface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "getEncryptedTotalLocked",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "getPendingAvailableBalanceHandle",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "hasClaimed", data: BytesLike): Result;
@@ -508,6 +517,8 @@ export interface ShareVault extends BaseContract {
 
   getEncryptedTotalLocked: TypedContractMethod<[], [string], "view">;
 
+  getPendingAvailableBalanceHandle: TypedContractMethod<[], [string], "view">;
+
   hasClaimed: TypedContractMethod<
     [arg0: BigNumberish, arg1: AddressLike],
     [boolean],
@@ -669,6 +680,9 @@ export interface ShareVault extends BaseContract {
   >;
   getFunction(
     nameOrSignature: "getEncryptedTotalLocked"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "getPendingAvailableBalanceHandle"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "hasClaimed"

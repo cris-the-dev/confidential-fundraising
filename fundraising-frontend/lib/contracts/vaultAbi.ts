@@ -511,6 +511,19 @@ export const VAULT_ABI = [
   },
   {
     inputs: [],
+    name: "getPendingAvailableBalanceHandle",
+    outputs: [
+      {
+        internalType: "bytes32",
+        name: "",
+        type: "bytes32",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
     name: "getEncryptedBalanceAndLocked",
     outputs: [
       {

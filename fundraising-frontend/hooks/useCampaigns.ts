@@ -567,17 +567,15 @@ export function useCampaigns() {
       console.log("📝 Step 1: Marking available balance as publicly decryptable...");
       await requestAvailableBalanceDecryption();
 
-      // Step 2: Get encrypted handle
-      console.log("🔍 Step 2: Getting encrypted balance handle...");
-      const balanceData = await client.readContract({
+      // Step 2: Get the pending available balance handle
+      // This is the handle that was marked as publicly decryptable
+      console.log("🔍 Step 2: Getting pending available balance handle...");
+      const handle = await client.readContract({
         address: VAULT_ADDRESS,
         abi: VAULT_ABI,
-        functionName: "getEncryptedBalanceAndLocked",
+        functionName: "getPendingAvailableBalanceHandle",
       });
 
-      // Note: The contract needs to store the pending available balance handle
-      // We'll use the balance handle for now (contract should expose the pending handle)
-      const handle = (balanceData as any)[0]; // First element should be the balance handle
       console.log("  - Handle:", handle);
 
       // Step 3: Decrypt using relayer SDK

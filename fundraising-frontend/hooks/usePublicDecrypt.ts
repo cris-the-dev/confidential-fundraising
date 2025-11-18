@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { getFhevmInstance } from "../lib/fhevm/init";
+import { useFhevm } from "../contexts/FhevmContext";
 
 /**
  * Hook for using the v0.9 self-relaying public decryption workflow
  * @returns Functions to decrypt encrypted handles using the relayer SDK
  */
 export function usePublicDecrypt() {
+  const { instance, isInitialized } = useFhevm();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
@@ -23,47 +24,79 @@ export function usePublicDecrypt() {
     setError(null);
 
     try {
-      // Get the relayer SDK instance from window (loaded via CDN)
-      const relayerSDK = (window as any).relayerSDK;
-      if (!relayerSDK) {
+      if (!instance || !isInitialized) {
         throw new Error(
-          "RelayerSDK not loaded. Make sure FHEVM is initialized."
+          "FHEVM not initialized. Please wait for initialization to complete."
         );
+      }
+
+      // Debug: Log available methods on instance
+      console.log("📊 Available instance methods:", Object.keys(instance).filter(k => typeof instance[k] === 'function'));
+
+      if (!instance.publicDecrypt) {
+        throw new Error("publicDecrypt method not available on FHEVM instance.");
       }
 
       console.log("🔓 Starting public decryption...");
       console.log("  - Handle:", handle);
       console.log("  - Contract:", contractAddress);
 
-      // Call the new publicDecrypt function from v0.3.0-5
-      const result = await relayerSDK.publicDecrypt(handle, contractAddress);
+      // Call publicDecrypt on the FHEVM instance
+      // Based on docs: instance.publicDecrypt([handles])
+      const result = await instance.publicDecrypt([handle]);
 
-      if (!result) {
-        throw new Error("publicDecrypt returned null or undefined");
+      console.log("✅ publicDecrypt raw result:", result);
+
+      if (!result || typeof result !== 'object') {
+        throw new Error("publicDecrypt returned invalid result");
       }
 
-      // Extract cleartext and proof from result
-      const { cleartext, proof } = result;
+      // v0.9 SDK returns: { clearValues, abiEncodedClearValues, decryptionProof }
+      const { clearValues, abiEncodedClearValues, decryptionProof } = result;
 
-      if (cleartext === undefined || cleartext === null) {
-        throw new Error("Cleartext not found in decryption result");
+      if (!clearValues) {
+        throw new Error("clearValues not found in decryption result");
       }
 
-      if (!proof) {
-        throw new Error("Proof not found in decryption result");
+      // clearValues is an object with handle as key
+      const decryptedValue = clearValues[handle];
+
+      if (decryptedValue === undefined || decryptedValue === null) {
+        console.error("❌ clearValues object:", clearValues);
+        console.error("❌ Looking for handle:", handle);
+        throw new Error("Decryption failed: no value returned for handle");
       }
 
       console.log("✅ Decryption successful!");
-      console.log("  - Cleartext:", cleartext.toString());
-      console.log("  - Proof length:", proof.length, "bytes");
+      console.log("  - Cleartext:", decryptedValue.toString());
+      console.log("  - ABI Encoded:", abiEncodedClearValues);
+      console.log("  - Proof:", decryptionProof?.substring(0, 66) + '...');
 
-      // Convert cleartext to bigint if it isn't already
+      // Convert to bigint
       const cleartextBigInt =
-        typeof cleartext === "bigint" ? cleartext : BigInt(cleartext);
+        typeof decryptedValue === "bigint"
+          ? decryptedValue
+          : typeof decryptedValue === "number"
+          ? BigInt(decryptedValue)
+          : typeof decryptedValue === "boolean"
+          ? BigInt(decryptedValue ? 1 : 0)
+          : BigInt(decryptedValue);
 
-      // Ensure proof is Uint8Array
-      const proofUint8 =
-        proof instanceof Uint8Array ? proof : new Uint8Array(proof);
+      // Extract the proof
+      let proofUint8: Uint8Array;
+      if (decryptionProof) {
+        // Convert hex string to Uint8Array
+        const proofHex = decryptionProof.startsWith('0x')
+          ? decryptionProof.slice(2)
+          : decryptionProof;
+        proofUint8 = new Uint8Array(
+          proofHex.match(/.{1,2}/g)?.map((byte: string) => parseInt(byte, 16)) || []
+        );
+        console.log("📝 Proof extracted, length:", proofUint8.length, "bytes");
+      } else {
+        console.error("❌ No decryptionProof in result!");
+        throw new Error("Decryption proof not found in result");
+      }
 
       return {
         cleartext: cleartextBigInt,
