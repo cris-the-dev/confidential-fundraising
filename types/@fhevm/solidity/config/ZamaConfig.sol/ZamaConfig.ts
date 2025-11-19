@@ -3,9 +3,7 @@
 /* eslint-disable */
 import type {
   BaseContract,
-  BytesLike,
   FunctionFragment,
-  Result,
   Interface,
   ContractRunner,
   ContractMethod,
@@ -16,25 +14,15 @@ import type {
   TypedDeferredTopicFilter,
   TypedEventLog,
   TypedListener,
-  TypedContractMethod,
 } from "../../../../common";
 
-export interface SepoliaConfigInterface extends Interface {
-  getFunction(nameOrSignature: "protocolId"): FunctionFragment;
+export interface ZamaConfigInterface extends Interface {}
 
-  encodeFunctionData(
-    functionFragment: "protocolId",
-    values?: undefined
-  ): string;
-
-  decodeFunctionResult(functionFragment: "protocolId", data: BytesLike): Result;
-}
-
-export interface SepoliaConfig extends BaseContract {
-  connect(runner?: ContractRunner | null): SepoliaConfig;
+export interface ZamaConfig extends BaseContract {
+  connect(runner?: ContractRunner | null): ZamaConfig;
   waitForDeployment(): Promise<this>;
 
-  interface: SepoliaConfigInterface;
+  interface: ZamaConfigInterface;
 
   queryFilter<TCEvent extends TypedContractEvent>(
     event: TCEvent,
@@ -73,15 +61,9 @@ export interface SepoliaConfig extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
-  protocolId: TypedContractMethod<[], [bigint], "view">;
-
   getFunction<T extends ContractMethod = ContractMethod>(
     key: string | FunctionFragment
   ): T;
-
-  getFunction(
-    nameOrSignature: "protocolId"
-  ): TypedContractMethod<[], [bigint], "view">;
 
   filters: {};
 }

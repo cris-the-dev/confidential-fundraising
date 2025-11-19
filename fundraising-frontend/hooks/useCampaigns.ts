@@ -9,6 +9,7 @@ import {
 } from "viem";
 import { sepolia } from "viem/chains";
 import { useEncrypt } from "./useEncrypt";
+import { usePublicDecrypt } from "./usePublicDecrypt";
 import { CONTRACT_ADDRESS, VAULT_ADDRESS } from "../lib/contracts/config";
 import { FUNDRAISING_ABI } from "../lib/contracts/abi";
 import { Campaign } from "../types";
@@ -17,6 +18,7 @@ import { VAULT_ABI } from "../lib/contracts/vaultAbi";
 export function useCampaigns() {
   const { wallets } = useWallets();
   const { encrypt64 } = useEncrypt();
+  const { publicDecrypt } = usePublicDecrypt();
   const [loading, setLoading] = useState(false);
 
   const getClient = useCallback(async () => {
@@ -120,6 +122,9 @@ export function useCampaigns() {
     }
   };
 
+  /**
+   * Step 1: Mark contribution as publicly decryptable (v0.9 self-relaying)
+   */
   const requestMyContributionDecryption = async (campaignId: number) => {
     setLoading(true);
     try {
@@ -133,7 +138,7 @@ export function useCampaigns() {
       });
 
       await client.waitForTransactionReceipt({ hash });
-      console.log("✅ Decryption requested, waiting for callback...");
+      console.log("✅ Marked as publicly decryptable (v0.9)");
       return hash;
     } catch (error) {
       console.error("Error requesting decryption:", error);
@@ -143,6 +148,64 @@ export function useCampaigns() {
     }
   };
 
+  /**
+   * Step 2 & 3: Complete self-relaying decryption workflow for contribution
+   * Gets encrypted handle, decrypts it, and submits proof to contract
+   */
+  const completeMyContributionDecryption = async (campaignId: number) => {
+    setLoading(true);
+    try {
+      const wallet = wallets[0];
+      if (!wallet) throw new Error("No wallet connected");
+
+      const client = await getClient();
+
+      // Step 1: Mark as decryptable
+      console.log("📝 Step 1: Marking as publicly decryptable...");
+      await requestMyContributionDecryption(campaignId);
+
+      // Step 2: Get encrypted handle
+      console.log("🔍 Step 2: Getting encrypted handle...");
+      const handle = await client.readContract({
+        address: CONTRACT_ADDRESS,
+        abi: FUNDRAISING_ABI,
+        functionName: "getEncryptedContribution",
+        args: [campaignId, wallet.address as `0x${string}`],
+      });
+
+      console.log("  - Handle:", handle);
+
+      // Step 3: Decrypt using relayer SDK
+      console.log("🔓 Step 3: Decrypting with relayer SDK...");
+      const { cleartext, proof } = await publicDecrypt(
+        handle as string,
+        CONTRACT_ADDRESS
+      );
+
+      // Step 4: Submit proof to contract
+      console.log("📤 Step 4: Submitting proof to contract...");
+      const submitHash = await client.writeContract({
+        address: CONTRACT_ADDRESS,
+        abi: FUNDRAISING_ABI,
+        functionName: "submitMyContributionDecryption",
+        args: [campaignId, cleartext, toHex(proof)],
+      });
+
+      await client.waitForTransactionReceipt({ hash: submitHash });
+      console.log("✅ Decryption complete and verified!");
+
+      return { cleartext, hash: submitHash };
+    } catch (error) {
+      console.error("❌ Complete decryption workflow failed:", error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
+   * Step 1: Mark total raised as publicly decryptable (v0.9 self-relaying)
+   */
   const requestTotalRaisedDecryption = async (campaignId: number) => {
     setLoading(true);
     try {
@@ -156,12 +219,61 @@ export function useCampaigns() {
       });
 
       await client.waitForTransactionReceipt({ hash });
-      console.log(
-        "✅ Total raised decryption requested, waiting for callback..."
-      );
+      console.log("✅ Total raised marked as publicly decryptable (v0.9)");
       return hash;
     } catch (error) {
       console.error("Error requesting total decryption:", error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
+   * Complete self-relaying decryption workflow for total raised
+   */
+  const completeTotalRaisedDecryption = async (campaignId: number) => {
+    setLoading(true);
+    try {
+      const client = await getClient();
+
+      // Step 1: Mark as decryptable
+      console.log("📝 Step 1: Marking total raised as publicly decryptable...");
+      await requestTotalRaisedDecryption(campaignId);
+
+      // Step 2: Get encrypted handle
+      console.log("🔍 Step 2: Getting encrypted total raised handle...");
+      const handle = await client.readContract({
+        address: CONTRACT_ADDRESS,
+        abi: FUNDRAISING_ABI,
+        functionName: "getEncryptedTotalRaised",
+        args: [campaignId],
+      });
+
+      console.log("  - Handle:", handle);
+
+      // Step 3: Decrypt using relayer SDK
+      console.log("🔓 Step 3: Decrypting total raised with relayer SDK...");
+      const { cleartext, proof } = await publicDecrypt(
+        handle as string,
+        CONTRACT_ADDRESS
+      );
+
+      // Step 4: Submit proof to contract
+      console.log("📤 Step 4: Submitting total raised proof to contract...");
+      const submitHash = await client.writeContract({
+        address: CONTRACT_ADDRESS,
+        abi: FUNDRAISING_ABI,
+        functionName: "submitTotalRaisedDecryption",
+        args: [campaignId, cleartext, toHex(proof)],
+      });
+
+      await client.waitForTransactionReceipt({ hash: submitHash });
+      console.log("✅ Total raised decryption complete and verified!");
+
+      return { cleartext, hash: submitHash };
+    } catch (error) {
+      console.error("❌ Complete total raised decryption failed:", error);
       throw error;
     } finally {
       setLoading(false);
@@ -414,7 +526,9 @@ export function useCampaigns() {
     }
   };
 
-  // Request available balance decryption
+  /**
+   * Step 1: Mark available balance as publicly decryptable (v0.9 self-relaying)
+   */
   const requestAvailableBalanceDecryption = async () => {
     setLoading(true);
     try {
@@ -428,10 +542,64 @@ export function useCampaigns() {
       });
 
       await client.waitForTransactionReceipt({ hash });
-      console.log("✅ Available balance decryption requested");
+      console.log("✅ Available balance marked as publicly decryptable (v0.9)");
       return hash;
     } catch (error) {
       console.error("Error requesting balance decryption:", error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
+   * Complete self-relaying decryption workflow for available balance
+   */
+  const completeAvailableBalanceDecryption = async () => {
+    setLoading(true);
+    try {
+      const wallet = wallets[0];
+      if (!wallet) throw new Error("No wallet connected");
+
+      const client = await getClient();
+
+      // Step 1: Mark as decryptable
+      console.log("📝 Step 1: Marking available balance as publicly decryptable...");
+      await requestAvailableBalanceDecryption();
+
+      // Step 2: Get the pending available balance handle
+      // This is the handle that was marked as publicly decryptable
+      console.log("🔍 Step 2: Getting pending available balance handle...");
+      const handle = await client.readContract({
+        address: VAULT_ADDRESS,
+        abi: VAULT_ABI,
+        functionName: "getPendingAvailableBalanceHandle",
+      });
+
+      console.log("  - Handle:", handle);
+
+      // Step 3: Decrypt using relayer SDK
+      console.log("🔓 Step 3: Decrypting available balance with relayer SDK...");
+      const { cleartext, proof } = await publicDecrypt(
+        handle as string,
+        VAULT_ADDRESS
+      );
+
+      // Step 4: Submit proof to contract
+      console.log("📤 Step 4: Submitting available balance proof to contract...");
+      const submitHash = await client.writeContract({
+        address: VAULT_ADDRESS,
+        abi: VAULT_ABI,
+        functionName: "submitAvailableBalanceDecryption",
+        args: [cleartext, toHex(proof)],
+      });
+
+      await client.waitForTransactionReceipt({ hash: submitHash });
+      console.log("✅ Available balance decryption complete and verified!");
+
+      return { cleartext, hash: submitHash };
+    } catch (error) {
+      console.error("❌ Complete available balance decryption failed:", error);
       throw error;
     } finally {
       setLoading(false);
@@ -574,16 +742,24 @@ export function useCampaigns() {
     claimTokens,
     getCampaign,
     getCampaignCount,
+    // v0.9 decryption workflow - step 1 only
     requestMyContributionDecryption,
     requestTotalRaisedDecryption,
+    requestAvailableBalanceDecryption,
+    // v0.9 complete decryption workflow (all steps)
+    completeMyContributionDecryption,
+    completeTotalRaisedDecryption,
+    completeAvailableBalanceDecryption,
+    // Status and getters
     getContributionStatus,
     checkHasContribution,
     checkHasClaimed,
     getTotalRaisedStatus,
-    depositToVault,
-    requestAvailableBalanceDecryption,
     getAvailableBalanceStatus,
+    // Vault operations
+    depositToVault,
     withdrawFromVault,
+    // Encrypted handles
     getEncryptedBalanceAndLocked,
     getEncryptedContribution,
     getEncryptedTotalRaised,

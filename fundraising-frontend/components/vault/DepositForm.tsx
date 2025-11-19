@@ -72,8 +72,8 @@ export function DepositForm({ onSuccess }: Props) {
           </label>
           <input
             type="number"
-            step="0.001"
-            min="0.001"
+            step="0.0001"
+            min="0.0001"
             max="18"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}

@@ -75,12 +75,18 @@ export default function ContributeForm({ campaignId, onSuccess }: Props) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Set loading state immediately for instant feedback
+    setIsSubmitting(true);
+    setError(null);
+
     if (!authenticated) {
+      setIsSubmitting(false);
       login();
       return;
     }
 
     if (!isInitialized) {
+      setIsSubmitting(false);
       setError('FHEVM is still initializing. Please wait a moment and try again.');
       return;
     }
@@ -88,18 +94,17 @@ export default function ContributeForm({ campaignId, onSuccess }: Props) {
     const amountNum = parseFloat(amount);
 
     if (!amount || amountNum <= 0) {
+      setIsSubmitting(false);
       setError('Please enter a valid amount greater than 0');
       return;
     }
 
     // Check uint64 max (~18.4 ETH)
     if (amountNum > 18.4) {
+      setIsSubmitting(false);
       setError('Amount too large. Maximum is ~18.4 ETH (uint64 limit)');
       return;
     }
-
-    setError(null);
-    setIsSubmitting(true);
 
     try {
       await contribute(campaignId, amount);
@@ -231,8 +236,8 @@ export default function ContributeForm({ campaignId, onSuccess }: Props) {
           </label>
           <input
             type="number"
-            step="0.001"
-            min="0.001"
+            step="0.0001"
+            min="0.0001"
             max="18"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}

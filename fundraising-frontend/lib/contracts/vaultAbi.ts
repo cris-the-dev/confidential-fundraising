@@ -511,6 +511,19 @@ export const VAULT_ABI = [
   },
   {
     inputs: [],
+    name: "getPendingAvailableBalanceHandle",
+    outputs: [
+      {
+        internalType: "bytes32",
+        name: "",
+        type: "bytes32",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
     name: "getEncryptedBalanceAndLocked",
     outputs: [
       {
@@ -640,6 +653,24 @@ export const VAULT_ABI = [
   {
     inputs: [],
     name: "requestAvailableBalanceDecryption",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint64",
+        name: "cleartextAvailable",
+        type: "uint64",
+      },
+      {
+        internalType: "bytes",
+        name: "proof",
+        type: "bytes",
+      },
+    ],
+    name: "submitAvailableBalanceDecryption",
     outputs: [],
     stateMutability: "nonpayable",
     type: "function",
