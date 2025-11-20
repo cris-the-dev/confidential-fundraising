@@ -87,3 +87,32 @@ img {
 .animate-progress {
   animation: progress 2s ease-in-out infinite;
 }
+
+/* Snackbar animations */
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes shrink {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
+}
+
+.animate-shrink {
+  animation: shrink linear forwards;
+}

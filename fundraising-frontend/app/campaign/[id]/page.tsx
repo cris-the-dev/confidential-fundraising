@@ -6,6 +6,7 @@ import { usePrivy } from '@privy-io/react-auth';
 import { formatEther } from 'viem';
 import { Campaign, DecryptStatus } from '../../../types';
 import { useCampaigns } from '../../../hooks/useCampaigns';
+import { useSnackbar } from '../../../contexts/SnackbarContext';
 import { ViewCampaignTotal } from '../../../components/campaign/ViewCampaignTotal';
 import { ViewMyContribution } from '../../../components/campaign/ViewMyContribution';
 import ContributeForm from '../../../components/campaign/ContributionForm';
@@ -26,11 +27,11 @@ export default function CampaignDetail() {
     checkHasClaimed,
     loading
   } = useCampaigns();
+  const { showSuccess, showError } = useSnackbar();
 
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [loadingCampaign, setLoadingCampaign] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null); // Keep for initial campaign load error
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
   const [isClaimingProcess, setIsClaimingProcess] = useState(false);
   const [claimingStep, setClaimingStep] = useState<string>('');
@@ -90,7 +91,6 @@ export default function CampaignDetail() {
   };
 
   const handleFinalizeSuccess = () => {
-    setActionSuccess('Campaign finalized successfully!');
     loadCampaign();
   };
 
@@ -101,14 +101,12 @@ export default function CampaignDetail() {
   const handleCancelConfirm = async () => {
     setIsCancelling(true);
     try {
-      setError(null);
-      setActionSuccess(null);
       await cancelCampaign(campaignId);
-      setActionSuccess('Campaign cancelled successfully! All funds have been unlocked.');
+      showSuccess('Campaign cancelled successfully! All funds have been unlocked.');
       setShowCancelDialog(false);
       await loadCampaign();
     } catch (err: any) {
-      setError(err.message || 'Failed to cancel campaign');
+      showError(err.message || 'Failed to cancel campaign');
     } finally {
       setIsCancelling(false);
     }
@@ -116,12 +114,10 @@ export default function CampaignDetail() {
 
   const handleClaim = async () => {
     if (!authenticated || !user?.wallet?.address) {
-      setError('Please connect your wallet');
+      showError('Please connect your wallet');
       return;
     }
 
-    setError(null);
-    setActionSuccess(null);
     setIsClaimingProcess(true);
 
     try {
@@ -164,7 +160,7 @@ export default function CampaignDetail() {
       setClaimingStep('Claiming your tokens...');
       await claimTokens(campaignId);
 
-      setActionSuccess('Tokens claimed successfully!');
+      showSuccess('Tokens claimed successfully!');
       setClaimingStep('');
 
       // Refresh token balance and contribution display after claiming
@@ -188,7 +184,7 @@ export default function CampaignDetail() {
         errorMessage = 'No contribution found to claim tokens for.';
       }
 
-      setError(errorMessage);
+      showError(errorMessage);
       setClaimingStep('');
     } finally {
       setIsClaimingProcess(false);
@@ -362,12 +358,6 @@ export default function CampaignDetail() {
                 <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">
                   Campaign Management
                 </h2>
-
-                {actionSuccess && (
-                  <div className="mb-4 bg-green-50 border border-green-200 rounded-lg p-4">
-                    <p className="text-sm text-green-800">{actionSuccess}</p>
-                  </div>
-                )}
 
                 {canFinalize && (
                   <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -561,12 +551,6 @@ export default function CampaignDetail() {
             )}
           </div>
         </div>
-
-        {error && (
-          <div className="mt-6 bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-sm text-red-800">{error}</p>
-          </div>
-        )}
       </div>
 
       {/* Finalize Modal */}

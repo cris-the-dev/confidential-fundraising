@@ -1,9 +1,9 @@
-// components/vault/DepositForm.tsx
 'use client';
 
 import { useState } from 'react';
 import { usePrivy } from '@privy-io/react-auth';
 import { useCampaigns } from '../../hooks/useCampaigns';
+import { useSnackbar } from '../../contexts/SnackbarContext';
 
 interface Props {
   onSuccess?: () => void;
@@ -12,9 +12,8 @@ interface Props {
 export function DepositForm({ onSuccess }: Props) {
   const { depositToVault, loading } = useCampaigns();
   const { authenticated, login } = usePrivy();
+  const { showSuccess, showError } = useSnackbar();
   const [amount, setAmount] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,23 +26,20 @@ export function DepositForm({ onSuccess }: Props) {
     const amountNum = parseFloat(amount);
 
     if (!amount || amountNum <= 0) {
-      setError('Please enter a valid amount greater than 0');
+      showError('Please enter a valid amount greater than 0');
       return;
     }
 
     // Check uint64 max (~18.4 ETH)
     if (amountNum > 18.4) {
-      setError('Amount too large. Maximum is ~18.4 ETH (uint64 limit)');
+      showError('Amount too large. Maximum is ~18.4 ETH (uint64 limit)');
       return;
     }
 
     try {
-      setError(null);
-      setSuccess(false);
-
       await depositToVault(amount);
 
-      setSuccess(true);
+      showSuccess('Deposit successful! Your funds are now in the vault.');
       setAmount('');
 
       if (onSuccess) {
@@ -51,7 +47,7 @@ export function DepositForm({ onSuccess }: Props) {
       }
     } catch (err: any) {
       console.error('Deposit error:', err);
-      setError(err.message || 'Failed to deposit. Please try again.');
+      showError(err.message || 'Failed to deposit. Please try again.');
     }
   };
 
@@ -85,20 +81,6 @@ export function DepositForm({ onSuccess }: Props) {
             Maximum ~18.4 ETH (uint64 limit)
           </p>
         </div>
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-sm text-red-800">{error}</p>
-          </div>
-        )}
-
-        {success && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <p className="text-sm text-green-800">
-              ✅ Deposit successful! Your funds are now in the vault.
-            </p>
-          </div>
-        )}
 
         <button
           type="submit"

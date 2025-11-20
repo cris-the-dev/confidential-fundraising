@@ -1,9 +1,9 @@
-// components/vault/WithdrawForm.tsx
 'use client';
 
 import { useState } from 'react';
 import { usePrivy } from '@privy-io/react-auth';
 import { useCampaigns } from '../../hooks/useCampaigns';
+import { useSnackbar } from '../../contexts/SnackbarContext';
 import { DecryptStatus } from '../../types';
 
 interface Props {
@@ -19,9 +19,8 @@ export function WithdrawForm({ availableBalance, onSuccess }: Props) {
     loading
   } = useCampaigns();
   const { authenticated, login } = usePrivy();
+  const { showSuccess, showError } = useSnackbar();
   const [amount, setAmount] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
   const [withdrawingStep, setWithdrawingStep] = useState<string>('');
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -35,14 +34,11 @@ export function WithdrawForm({ availableBalance, onSuccess }: Props) {
     const amountNum = parseFloat(amount);
 
     if (!amount || amountNum <= 0) {
-      setError('Please enter a valid amount greater than 0');
+      showError('Please enter a valid amount greater than 0');
       return;
     }
 
     try {
-      setError(null);
-      setSuccess(false);
-
       // Step 1: Check if available balance is decrypted
       setWithdrawingStep('Checking available balance status...');
       const balanceStatus = await getAvailableBalanceStatus();
@@ -73,7 +69,7 @@ export function WithdrawForm({ availableBalance, onSuccess }: Props) {
       setWithdrawingStep('Withdrawing from vault...');
       await withdrawFromVault(amount);
 
-      setSuccess(true);
+      showSuccess('Withdrawal successful! Check your wallet.');
       setAmount('');
       setWithdrawingStep('');
 
@@ -97,7 +93,7 @@ export function WithdrawForm({ availableBalance, onSuccess }: Props) {
         errorMessage = 'Decryption took too long. Please try again.';
       }
 
-      setError(errorMessage);
+      showError(errorMessage);
       setWithdrawingStep('');
     }
   };
@@ -166,20 +162,6 @@ export function WithdrawForm({ availableBalance, onSuccess }: Props) {
             </p>
           )}
         </div>
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-sm text-red-800">{error}</p>
-          </div>
-        )}
-
-        {success && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <p className="text-sm text-green-800">
-              ✅ Withdrawal successful! Check your wallet.
-            </p>
-          </div>
-        )}
 
         <button
           type="submit"

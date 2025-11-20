@@ -1,4 +1,3 @@
-// components/campaign/ContributionForm.tsx
 'use client';
 
 import { useState } from 'react';
@@ -6,6 +5,7 @@ import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { useCampaigns } from '../../hooks/useCampaigns';
 import { useDecrypt } from '../../hooks/useDecrypt';
 import { useFhevm } from '../../contexts/FhevmContext';
+import { useSnackbar } from '../../contexts/SnackbarContext';
 import { parseEther } from 'viem';
 import Link from 'next/link';
 import { VAULT_ADDRESS } from '../../lib/contracts/config';
@@ -25,10 +25,9 @@ export default function ContributeForm({ campaignId, onSuccess }: Props) {
   } = useCampaigns();
   const { decrypt } = useDecrypt();
   const { instance: fhevm, isInitialized, isLoading: fhevmLoading } = useFhevm();
+  const { showSuccess, showError } = useSnackbar();
 
   const [amount, setAmount] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Optional vault balance state (for display only, not required for contribution)
@@ -43,7 +42,6 @@ export default function ContributeForm({ campaignId, onSuccess }: Props) {
     }
 
     setCheckingBalance(true);
-    setError(null);
 
     try {
       // Get encrypted balance and locked amounts
@@ -64,9 +62,10 @@ export default function ContributeForm({ campaignId, onSuccess }: Props) {
       // Calculate available
       const available = balance - locked;
       setAvailableBalance(available);
+      showSuccess('Balance loaded successfully');
     } catch (err: any) {
       console.error('Balance check error:', err);
-      setError('Failed to check vault balance. Please try again.');
+      showError('Failed to check vault balance. Please try again.');
     } finally {
       setCheckingBalance(false);
     }
@@ -77,7 +76,6 @@ export default function ContributeForm({ campaignId, onSuccess }: Props) {
 
     // Set loading state immediately for instant feedback
     setIsSubmitting(true);
-    setError(null);
 
     if (!authenticated) {
       setIsSubmitting(false);
@@ -87,7 +85,7 @@ export default function ContributeForm({ campaignId, onSuccess }: Props) {
 
     if (!isInitialized) {
       setIsSubmitting(false);
-      setError('FHEVM is still initializing. Please wait a moment and try again.');
+      showError('FHEVM is still initializing. Please wait a moment and try again.');
       return;
     }
 
@@ -95,31 +93,30 @@ export default function ContributeForm({ campaignId, onSuccess }: Props) {
 
     if (!amount || amountNum <= 0) {
       setIsSubmitting(false);
-      setError('Please enter a valid amount greater than 0');
+      showError('Please enter a valid amount greater than 0');
       return;
     }
 
     // Check uint64 max (~18.4 ETH)
     if (amountNum > 18.4) {
       setIsSubmitting(false);
-      setError('Amount too large. Maximum is ~18.4 ETH (uint64 limit)');
+      showError('Amount too large. Maximum is ~18.4 ETH (uint64 limit)');
       return;
     }
 
     try {
+      // Small delay to let React render the loading state before heavy encryption
+      await new Promise(resolve => setTimeout(resolve, 0));
+
       await contribute(campaignId, amount);
 
-      setSuccess(true);
+      showSuccess('Contribution successful! Your funds are locked in the vault.');
       setAmount('');
 
       // Clear balance since contribution changed the locked amount
       setAvailableBalance(null);
 
-      setTimeout(() => {
-        setSuccess(false);
-        onSuccess();
-      }, 3000);
-
+      onSuccess();
     } catch (err: any) {
       console.error('Contribution error:', err);
 
@@ -135,7 +132,7 @@ export default function ContributeForm({ campaignId, onSuccess }: Props) {
         errorMessage = err.message;
       }
 
-      setError(errorMessage);
+      showError(errorMessage);
     } finally {
       setIsSubmitting(false); // Clear loading state
     }
@@ -243,7 +240,7 @@ export default function ContributeForm({ campaignId, onSuccess }: Props) {
             onChange={(e) => setAmount(e.target.value)}
             placeholder="1.0"
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            disabled={loading}
+            disabled={loading || isSubmitting}
           />
           {availableBalance !== null && (
             <p className="text-xs text-gray-500 mt-1">
@@ -256,28 +253,6 @@ export default function ContributeForm({ campaignId, onSuccess }: Props) {
         {fhevmLoading && (
           <div className="text-xs text-purple-700 bg-purple-50 p-3 rounded border border-purple-200">
             ⏳ Initializing encryption system...
-          </div>
-        )}
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-sm text-red-800">{error}</p>
-            {error.includes('deposit') && (
-              <Link
-                href="/vault"
-                className="inline-block mt-2 text-sm text-red-700 hover:text-red-800 underline font-medium"
-              >
-                → Go to Vault to Deposit
-              </Link>
-            )}
-          </div>
-        )}
-
-        {success && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <p className="text-sm text-green-800">
-              ✅ Contribution successful! Your funds are locked in the vault.
-            </p>
           </div>
         )}
 

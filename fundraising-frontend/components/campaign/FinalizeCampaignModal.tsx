@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useCampaigns } from '../../hooks/useCampaigns';
+import { useSnackbar } from '../../contexts/SnackbarContext';
 import { DecryptStatus } from '../../types';
 
 interface Props {
@@ -25,9 +26,9 @@ export function FinalizeCampaignModal({
     completeTotalRaisedDecryption, // v0.9 complete workflow
     loading
   } = useCampaigns();
+  const { showSuccess, showError } = useSnackbar();
   const [tokenName, setTokenName] = useState('');
   const [tokenSymbol, setTokenSymbol] = useState('');
-  const [error, setError] = useState<string | null>(null);
   const [finalizingStep, setFinalizingStep] = useState<string>('');
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -35,27 +36,26 @@ export function FinalizeCampaignModal({
 
     // Validation
     if (!tokenName.trim()) {
-      setError('Token name is required');
+      showError('Token name is required');
       return;
     }
 
     if (!tokenSymbol.trim()) {
-      setError('Token symbol is required');
+      showError('Token symbol is required');
       return;
     }
 
     if (tokenSymbol.length > 10) {
-      setError('Token symbol should be 10 characters or less');
+      showError('Token symbol should be 10 characters or less');
       return;
     }
 
     if (!/^[A-Za-z0-9]+$/.test(tokenSymbol)) {
-      setError('Token symbol should only contain letters and numbers');
+      showError('Token symbol should only contain letters and numbers');
       return;
     }
 
     try {
-      setError(null);
 
       // Step 1: Check if total raised is decrypted
       setFinalizingStep('Checking total raised status...');
@@ -85,6 +85,7 @@ export function FinalizeCampaignModal({
       await finalizeCampaign(campaignId, tokenName.trim(), tokenSymbol.trim().toUpperCase());
 
       setFinalizingStep('');
+      showSuccess('Campaign finalized successfully! Tokens are being distributed.');
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -102,7 +103,7 @@ export function FinalizeCampaignModal({
         errorMessage = 'Only the campaign owner can finalize';
       }
 
-      setError(errorMessage);
+      showError(errorMessage);
       setFinalizingStep('');
     }
   };
@@ -111,7 +112,6 @@ export function FinalizeCampaignModal({
     if (!loading && !finalizingStep) {
       setTokenName('');
       setTokenSymbol('');
-      setError(null);
       setFinalizingStep('');
       onClose();
     }
@@ -262,12 +262,6 @@ export function FinalizeCampaignModal({
                 <li>• Standard: ERC-20 compliant</li>
               </ul>
             </div>
-
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                <p className="text-sm text-red-800">{error}</p>
-              </div>
-            )}
 
             {/* Actions */}
             <div className="flex gap-3 pt-2">
