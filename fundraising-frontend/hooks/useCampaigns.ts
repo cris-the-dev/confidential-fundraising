@@ -2,6 +2,8 @@ import { useCallback, useState } from "react";
 import { useWallets } from "@privy-io/react-auth";
 import {
   createWalletClient,
+  createPublicClient,
+  http,
   custom,
   publicActions,
   parseEther,
@@ -20,6 +22,14 @@ export function useCampaigns() {
   const { encrypt64 } = useEncrypt();
   const { publicDecrypt } = usePublicDecrypt();
   const [loading, setLoading] = useState(false);
+
+  // Public client for read-only operations (no wallet required)
+  const getPublicClient = useCallback(() => {
+    return createPublicClient({
+      chain: sepolia,
+      transport: http(),
+    });
+  }, []);
 
   const getClient = useCallback(async () => {
     const wallet = wallets[0];
@@ -353,7 +363,7 @@ export function useCampaigns() {
 
   const getCampaign = async (campaignId: number): Promise<Campaign> => {
     try {
-      const client = await getClient();
+      const client = getPublicClient();
 
       const result = await client.readContract({
         address: CONTRACT_ADDRESS,
@@ -381,7 +391,7 @@ export function useCampaigns() {
 
   const getCampaignCount = async (): Promise<number> => {
     try {
-      const client = await getClient();
+      const client = getPublicClient();
 
       const count = await client.readContract({
         address: CONTRACT_ADDRESS,
@@ -405,7 +415,7 @@ export function useCampaigns() {
     cacheExpiry: bigint;
   }> => {
     try {
-      const client = await getClient();
+      const client = getPublicClient();
 
       const result = await client.readContract({
         address: CONTRACT_ADDRESS,
@@ -430,7 +440,7 @@ export function useCampaigns() {
     userAddress: string
   ): Promise<boolean> => {
     try {
-      const client = await getClient();
+      const client = getPublicClient();
 
       const result = await client.readContract({
         address: CONTRACT_ADDRESS,
@@ -451,7 +461,7 @@ export function useCampaigns() {
     userAddress: string
   ): Promise<boolean> => {
     try {
-      const client = await getClient();
+      const client = getPublicClient();
 
       const result = await client.readContract({
         address: CONTRACT_ADDRESS,
@@ -697,7 +707,7 @@ export function useCampaigns() {
     userAddress: string
   ): Promise<string> => {
     try {
-      const client = await getClient();
+      const client = getPublicClient();
 
       const result = await client.readContract({
         address: CONTRACT_ADDRESS,
@@ -717,7 +727,7 @@ export function useCampaigns() {
     campaignId: number
   ): Promise<string> => {
     try {
-      const client = await getClient();
+      const client = getPublicClient();
 
       const result = await client.readContract({
         address: CONTRACT_ADDRESS,
