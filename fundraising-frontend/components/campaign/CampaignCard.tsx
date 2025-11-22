@@ -117,21 +117,23 @@ export default function CampaignCard({ campaign }: CampaignCardProps) {
   };
 
   return (
-    <Link href={`/campaign/${campaign.id}`}>
-      <div className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden border border-gray-200 cursor-pointer">
-        <div className="p-6">
-          <div className="flex justify-between items-start mb-4">
+    <Link href={`/campaign/${campaign.id}`} className="h-full">
+      <div className="h-full bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden border border-gray-200 cursor-pointer flex flex-col">
+        <div className="p-6 flex-1 flex flex-col">
+          <div className="flex justify-between items-start mb-4 gap-2">
             <h3 className="text-xl font-bold text-gray-900 line-clamp-2 flex-1">
               {campaign.title}
             </h3>
-            {getStatusBadge()}
+            <div className="flex-shrink-0">
+              {getStatusBadge()}
+            </div>
           </div>
 
-          <p className="text-gray-600 mb-4 line-clamp-2">
+          <p className="text-gray-600 mb-4 line-clamp-3">
             {campaign.description}
           </p>
 
-          <div className="space-y-3">
+          <div className="space-y-3 mt-auto">
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-500">Target</span>
               <span className="text-lg font-bold text-purple-600">
@@ -172,7 +174,7 @@ export default function CampaignCard({ campaign }: CampaignCardProps) {
           </div>
         </div>
 
-        <div className="bg-gray-50 px-6 py-4 border-t border-gray-100">
+        <div className="bg-gray-50 px-6 py-4 border-t border-gray-100 flex-shrink-0">
           <button className="w-full bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700 transition font-medium">
             View Campaign
           </button>
