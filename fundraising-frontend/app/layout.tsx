@@ -7,6 +7,7 @@ import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
 import LoadingWrapper from '../components/LoadingWrapper';
 import PrivyProvider from '../contexts/PriviProvider';
+import NetworkSwitcher from '../components/NetworkSwitcher';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -33,6 +34,7 @@ export default function RootLayout({
               <LoadingWrapper>
                 <div className="min-h-screen bg-gray-50 flex flex-col">
                   <Header />
+                  <NetworkSwitcher />
                   <main className="flex-grow">{children}</main>
                   <Footer />
                 </div>
