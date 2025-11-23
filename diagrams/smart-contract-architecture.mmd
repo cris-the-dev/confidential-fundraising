@@ -9,22 +9,44 @@ classDiagram
         +createCampaign()
         +contribute()
         +finalizeCampaign()
+        +cancelCampaign()
         +claimTokens()
+        +requestMyContributionDecryption()
+        +submitMyContributionDecryption()
+        +requestTotalRaisedDecryption()
+        +submitTotalRaisedDecryption()
         +getEncryptedContribution()
         +getEncryptedTotalRaised()
+        +getContributionStatus()
+        +getTotalRaisedStatus()
+        +getMyContribution()
+        +getTotalRaised()
+        +getCampaign()
+        +hasContribution()
+        +hasClaimed()
         -Campaign[] campaigns
         -mapping contributions
+        -mapping decryptedContributions
+        -mapping decryptedTotalRaised
     }
 
     class ShareVault {
         +deposit()
         +withdraw()
+        +requestAvailableBalanceDecryption()
+        +submitAvailableBalanceDecryption()
         +lockFunds()
         +transferLockedFunds()
         +unlockFunds()
+        +getAvailableBalanceStatus()
+        +getAvailableBalance()
+        +getPendingAvailableBalanceHandle()
         +getEncryptedBalance()
+        +getEncryptedBalanceAndLocked()
         -euint64 balances
-        -mapping lockedAmounts
+        -euint64 lockedAmounts
+        -euint64 totalLocked
+        -mapping decryptedAvailableBalance
     }
 
     class CampaignToken {

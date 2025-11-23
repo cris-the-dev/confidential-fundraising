@@ -7,23 +7,51 @@ config:
 sequenceDiagram
     participant U as 👤 Contributor
     participant F as 🎨 Frontend
-    participant SDK as 🔐 FHEVM SDK
+    participant R as 🔐 Relayer SDK
     participant CF as 📝 ConfidentialFundraising
     participant CT as 🪙 CampaignToken
 
     U->>F: Click "Claim Tokens"
+    F->>CF: Verify campaign finalized & successful
 
-    F->>CF: getEncryptedContribution(campaignId)
-    CF-->>F: encryptedContribution
-    F->>SDK: Decrypt contribution amount
-    SDK-->>F: decryptedContribution
+    rect rgb(240, 255, 250)
+        Note over U,CF: v0.9 Self-Relaying Decryption (4 Steps)
+
+        Note over F,CF: Step 1: Request Decryption
+        F->>CF: requestMyContributionDecryption(campaignId)
+        CF->>CF: FHE.makePubliclyDecryptable(myContribution)
+        CF->>CF: Set status = PROCESSING
+        CF-->>F: ✅ Marked as decryptable
+
+        Note over F,CF: Step 2: Get Encrypted Handle
+        F->>CF: getEncryptedContribution(campaignId, userAddress)
+        CF-->>F: encryptedHandle
+
+        Note over F,R: Step 3: Public Decrypt with Proof
+        F->>R: instance.publicDecrypt([handle])
+        R->>R: Decrypt + generate proof
+        R-->>F: { cleartext, proof }
+
+        Note over F,CF: Step 4: Submit Proof
+        F->>CF: submitMyContributionDecryption(campaignId, cleartext, proof)
+        CF->>CF: FHE.checkSignatures(handle, cleartext, proof)
+        CF->>CF: Cache cleartext, set status = DECRYPTED
+        CF-->>F: ✅ Decryption verified & cached
+    end
+
+    F->>F: Display contribution amount
+    U->>F: Confirm claim
 
     F->>CF: claimTokens(campaignId)
+    CF->>CF: Read cached decrypted contribution
     CF->>CF: Verify campaign successful
-    CF->>CF: Calculate tokens:<br/>userTokens = (contribution / target) * MAX_SUPPLY
+    CF->>CF: Verify not already claimed
+    CF->>CF: Calculate tokens:<br/>userTokens = (contribution / target) × MAX_SUPPLY
+
     CF->>CT: mint(contributor, userTokens)
     CT->>CT: Mint tokens to contributor
     CT-->>CF: ✅ Tokens minted
+
     CF->>CF: Mark user as claimed
     CF-->>F: ✅ Tokens claimed
     F-->>U: "🎊 Received X tokens!"

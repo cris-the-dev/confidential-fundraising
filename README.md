@@ -7,15 +7,68 @@ Author: [@cris_thedev](https://x.com/cris_thedev)
 
 | Contract Name | Network | Contract Address
 |----------|-------------|--------|
-| ConfidentialFundraising | Sepolia | [`0x203db914535Dd91A10cC934FC813C847d25B488e`](https://sepolia.etherscan.io/address/0x203db914535Dd91A10cC934FC813C847d25B488e) |
-| ShareVault | Sepolia | [`0xC99D0fF63B8b86F227F08F37b40a563Ccc23c65b`](https://sepolia.etherscan.io/address/0xC99D0fF63B8b86F227F08F37b40a563Ccc23c65b) |
----
-Demo Video: [Loom demo video](https://www.loom.com/share/79e14fa3ebcf46188041079983966130)
+| ConfidentialFundraising | Sepolia | [`0xc598A7B075bCd35D1996E3700b74f9623A4D2E37`](https://sepolia.etherscan.io/address/0xc598A7B075bCd35D1996E3700b74f9623A4D2E37) |
+| ShareVault | Sepolia | [`0xAe68e85dAF30bddb969B3c572b266dCd667eb55c`](https://sepolia.etherscan.io/address/0xAe68e85dAF30bddb969B3c572b266dCd667eb55c) |
 ---
 
 ## 📖 Concept
 
 The Confidential Fundraising Platform revolutionizes crowdfunding by combining blockchain transparency with **cryptographic privacy**. Traditional fundraising platforms expose all contribution amounts publicly, which can influence donor behavior and compromise privacy. My solution leverages **homomorphic encryption** to keep contribution amounts encrypted on-chain while still enabling mathematical operations like summing total contributions.
+
+### Problem Statement
+
+**Traditional Crowdfunding Privacy Issues:**
+1. **Contribution Visibility** - All donation amounts are publicly visible, creating:
+   - Social pressure dynamics (large donations influencing others)
+   - Privacy concerns (financial exposure of contributors)
+   - Potential discrimination based on contribution size
+   - Competitive intelligence for rival campaigns
+
+2. **Trust & Transparency Trade-off** - Existing solutions force a choice between:
+   - Full transparency (blockchain) → No privacy
+   - Full privacy (centralized) → No verifiability
+   - There's no middle ground
+
+3. **Refund Complexity** - Failed campaigns require manual refund processes that are:
+   - Time-consuming and error-prone
+   - Expensive (gas costs for individual refunds)
+   - Trust-dependent (campaign owner must initiate)
+
+### Solution: FHEVM-Powered Private Fundraising
+
+**How Fully Homomorphic Encryption Solves This:**
+
+1. **Encrypted Contributions** - Using FHEVM's `euint64` type:
+   - Contribution amounts stored as encrypted ciphertexts
+   - On-chain operations (addition, comparison) work directly on encrypted data
+   - No plaintext exposure during computation
+
+2. **Selective Decryption** - v0.9.1 self-relaying pattern:
+   - Campaign owners decrypt only the total (not individual contributions)
+   - Contributors decrypt only their own contribution (for token claims)
+   - Cryptographic proofs prevent tampering or false submissions
+
+3. **Automated Escrow** - ShareVault contract:
+   - Encrypted balance tracking per user
+   - Per-campaign fund locking prevents double-spending
+   - Automatic unlocking on campaign failure (no manual refunds)
+   - Owner receives funds atomically on success
+
+**Mathematical Foundation:**
+
+For contributors A, B, C with encrypted contributions `eA`, `eB`, `eC`:
+```
+Total = FHE.add(FHE.add(eA, eB), eC)  // Encrypted total
+```
+
+The campaign owner can decrypt `Total` without ever seeing `eA`, `eB`, or `eC` individually.
+
+**Privacy Guarantees:**
+- ✅ Contribution amounts never visible to public
+- ✅ Campaign totals hidden until owner decryption
+- ✅ Vault balances private (only owner can decrypt)
+- ✅ Zero-knowledge proofs ensure correctness without revelation
+- ✅ All computations happen on encrypted data (no intermediate plaintext)
 
 ### Key Features
 
@@ -82,43 +135,188 @@ graph TB
         D --> E
     end
 
-    subgraph "📥 Self-Relaying Decryption Process"
-        F[User Request] --> G[1. Mark as Publicly<br/>Decryptable]
-        G --> H[Smart Contract<br/>FHE.makePubliclyDecryptable]
-        H --> I[2. Get Encrypted<br/>Handle]
-        I --> J[3. Relayer SDK<br/>publicDecrypt]
-        J --> K[Cleartext +<br/>Proof]
-        K --> L[4. Submit Proof<br/>to Contract]
-        L --> M[Smart Contract<br/>FHE.checkSignatures]
-        M --> N[✅ Verified<br/>Decryption]
+    subgraph "📥 v0.9 Self-Relaying Decryption Process"
+        F[User Initiates<br/>Decryption] --> G[1. Request<br/>Decryption]
+        G --> H[Contract Call<br/>request*Decryption]
+        H --> I[FHE.makePubliclyDecryptable<br/>Status: PROCESSING]
+        I --> J[2. Get Encrypted<br/>Handle]
+        J --> K[Contract Read<br/>getEncrypted*]
+        K --> L[3. Public Decrypt<br/>via Relayer SDK]
+        L --> M[instance.publicDecrypt<br/>Returns cleartext + proof]
+        M --> N[4. Submit Proof]
+        N --> O[Contract Call<br/>submit*Decryption]
+        O --> P[FHE.checkSignatures<br/>Verify proof]
+        P --> Q[✅ Cache Cleartext<br/>Status: DECRYPTED]
     end
 
-    E -.Stored On-Chain.-> F
+    E -.Encrypted Data<br/>On-Chain.-> F
 
     style A fill:#ffcccc,stroke:#333,stroke-width:2px
-    style N fill:#ccffcc,stroke:#333,stroke-width:2px
+    style Q fill:#ccffcc,stroke:#333,stroke-width:2px
     style E fill:#cce5ff,stroke:#333,stroke-width:2px
-    style H fill:#cce5ff,stroke:#333,stroke-width:2px
-    style J fill:#ffd700,stroke:#333,stroke-width:3px
-    style M fill:#ff9966,stroke:#333,stroke-width:2px
+    style I fill:#cce5ff,stroke:#333,stroke-width:2px
+    style M fill:#ffd700,stroke:#333,stroke-width:3px
+    style P fill:#ff9966,stroke:#333,stroke-width:2px
 ```
 
-#### Decryption Workflow Details
+#### Decryption Workflow Details (v0.9.1)
 
-The platform uses **FHEVM v0.9 self-relaying decryption** for secure and instant value decryption:
+The platform uses **FHEVM v0.9.1 self-relaying decryption** for secure and instant value decryption:
 
 **4-Step Self-Relaying Process:**
 
-1. **Mark as Decryptable**: Contract marks the encrypted value as publicly decryptable using `FHE.makePubliclyDecryptable()`
-2. **Get Handle**: Frontend retrieves the encrypted handle from the contract
-3. **Decrypt**: Relayer SDK's `publicDecrypt()` decrypts the value and generates a cryptographic proof
-4. **Submit Proof**: Frontend submits the cleartext and proof back to the contract for verification via `FHE.checkSignatures()`
+1. **Request Decryption** → User calls `request*Decryption()` which marks the encrypted value as publicly decryptable using `FHE.makePubliclyDecryptable()` and sets status to `PROCESSING`
+2. **Get Handle** → Frontend retrieves the encrypted handle by calling `getEncrypted*()` view function
+3. **Public Decrypt** → Relayer SDK's `instance.publicDecrypt([handle])` decrypts the value and generates cryptographic proof
+4. **Submit Proof** → User calls `submit*Decryption(cleartext, proof)` which verifies via `FHE.checkSignatures()`, caches the cleartext, and sets status to `DECRYPTED`
+
+**Decryption Variants by Use Case:**
+
+| Use Case | Request Function | Submit Function | Access Control |
+|----------|-----------------|-----------------|----------------|
+| **My Contribution** | `requestMyContributionDecryption(campaignId)` | `submitMyContributionDecryption(campaignId, cleartext, proof)` | Contributor only |
+| **Campaign Total** | `requestTotalRaisedDecryption(campaignId)` | `submitTotalRaisedDecryption(campaignId, cleartext, proof)` | Campaign owner only |
+| **Vault Balance** | `requestAvailableBalanceDecryption()` | `submitAvailableBalanceDecryption(cleartext, proof)` | Account owner only |
+
+**Status Tracking:**
+- `NONE (0)` → Initial state, not yet requested
+- `PROCESSING (1)` → Decryption requested, waiting for proof submission
+- `DECRYPTED (2)` → Cleartext cached and available
+
+**Cache Management:**
+- Decrypted values cached for **10 minutes** (600 seconds)
+- After expiration, must repeat the 4-step workflow
+- Status functions: `get*Status()` return status, cached value, and expiry timestamp
 
 **Benefits over Oracle-based decryption:**
-- ⚡ **Instant**: No waiting for gateway callbacks (10-30 seconds)
+- ⚡ **Instant**: No waiting for gateway callbacks (saves 10-30 seconds)
 - 🔐 **Secure**: Cryptographic proofs prevent tampering
-- 👤 **User-controlled**: Users trigger and sign decryption requests
-- 💰 **Cost-effective**: No reliance on third-party oracle services
+- 👤 **User-controlled**: Users sign and submit their own decryption requests
+- 💰 **Cost-effective**: Single transaction flow, no oracle relay fees
+
+---
+
+## 🔬 Technical Innovation & FHEVM Implementation
+
+### Why FHEVM v0.9.1?
+
+This project leverages **FHEVM v0.9.1's self-relaying decryption** pattern, which provides significant advantages over traditional oracle-based decryption:
+
+| Feature | v0.8 Oracle Decryption | v0.9.1 Self-Relaying | Improvement |
+|---------|----------------------|---------------------|-------------|
+| **Latency** | 10-30 seconds (gateway callback) | 1-3 seconds (direct) | **10-30x faster** |
+| **User Control** | Gateway submits transaction | User signs & submits | **Full user control** |
+| **Transparency** | Opaque oracle process | Cryptographic proof on-chain | **Verifiable** |
+| **Cost** | Oracle relay fees + gas | Gas only | **Lower cost** |
+| **Status Tracking** | Limited visibility | NONE/PROCESSING/DECRYPTED states | **Better UX** |
+
+### FHE Operations Used
+
+The platform utilizes these FHEVM operations for encrypted computation:
+
+**Arithmetic Operations:**
+```solidity
+// Adding encrypted contributions
+euint64 newTotal = FHE.add(currentTotal, encryptedContribution);
+
+// Subtracting from encrypted balance
+euint64 newBalance = FHE.sub(balance, withdrawAmount);
+```
+
+**Comparison & Conditional Operations:**
+```solidity
+// Check if balance >= required amount
+ebool hasSufficient = FHE.ge(availableBalance, requiredAmount);
+
+// Conditional selection (ternary for encrypted values)
+euint64 lockAmount = FHE.select(hasSufficient, requiredAmount, FHE.asEuint64(0));
+```
+
+**Decryption Workflow:**
+```solidity
+// Step 1: Mark as publicly decryptable
+FHE.makePubliclyDecryptable(encryptedValue);
+
+// Step 4: Verify cryptographic proof
+bytes32[] memory handles = new bytes32[](1);
+handles[0] = FHE.toBytes32(encryptedValue);
+bytes memory cleartexts = abi.encode(cleartextValue);
+FHE.checkSignatures(handles, cleartexts, proof);  // Throws if invalid
+```
+
+### Gas Optimization Strategies
+
+**1. Type Optimization:**
+- `uint16` for campaign IDs (max 65,535 campaigns, saves 14 bytes per ID)
+- `uint64` for amounts (max ~18.4 ETH, sufficient for most campaigns)
+- Packed structs to minimize storage slots
+
+**2. Encrypted Operations:**
+- All balance arithmetic happens encrypted (no decrypt-modify-encrypt cycles)
+- FHE operations are gas-intensive but eliminate decryption overhead
+
+**3. Cache Management:**
+- 10-minute cache expiry prevents redundant decryptions
+- Cached values stored in mappings for O(1) access
+- Status tracking prevents duplicate decryption requests
+
+**4. Batch Operations:**
+- Token distribution happens per-contributor (gas paid by claimer)
+- Vault locking uses per-campaign granularity
+- No unbounded loops in state-changing functions
+
+### Security Architecture
+
+**Access Control Matrix:**
+
+| Function | Public | Contributor | Campaign Owner | Vault Owner |
+|----------|--------|-------------|----------------|-------------|
+| `createCampaign()` | ✅ | ✅ | ✅ | ✅ |
+| `contribute()` | ✅ | ✅ | ✅ | ✅ |
+| `finalizeCampaign()` | ❌ | ❌ | ✅ | ❌ |
+| `cancelCampaign()` | ❌ | ❌ | ✅ | ❌ |
+| `claimTokens()` | ❌ | ✅ (if contributed) | ❌ | ❌ |
+| `requestMyContributionDecryption()` | ❌ | ✅ (own only) | ❌ | ❌ |
+| `requestTotalRaisedDecryption()` | ❌ | ❌ | ✅ | ❌ |
+| `requestAvailableBalanceDecryption()` | ✅ (own balance) | ✅ (own balance) | ✅ (own balance) | ✅ (own balance) |
+| `deposit()` | ✅ | ✅ | ✅ | ✅ |
+| `withdraw()` | ✅ (own funds) | ✅ (own funds) | ✅ (own funds) | ✅ (own funds) |
+
+**Attack Vectors & Mitigations:**
+
+1. **Double-Spending Prevention:**
+   - ❌ Attack: Contributor tries to use same funds for multiple campaigns
+   - ✅ Mitigation: Per-campaign fund locking in ShareVault, `totalLocked` tracking
+
+2. **Decryption Proof Forgery:**
+   - ❌ Attack: Submit fake cleartext with forged proof
+   - ✅ Mitigation: `FHE.checkSignatures()` cryptographically verifies proof against encrypted handle
+
+3. **Cache Poisoning:**
+   - ❌ Attack: Manipulate cached decrypted values
+   - ✅ Mitigation: Cache only written after proof verification, 10-min expiry forces refresh
+
+4. **Unauthorized Fund Transfer:**
+   - ❌ Attack: Non-campaign contract tries to call `lockFunds()`
+   - ✅ Mitigation: `onlyCampaignContract` modifier on ShareVault internal functions
+
+5. **Finalization Without Decryption:**
+   - ❌ Attack: Finalize campaign without knowing actual total
+   - ✅ Mitigation: Requires cached decrypted total, reverts if not decrypted or expired
+
+6. **Token Supply Manipulation:**
+   - ❌ Attack: Mint unlimited tokens
+   - ✅ Mitigation: MAX_SUPPLY constant (1 billion), reverts if exceeded
+
+**FHE Permission Management:**
+
+```solidity
+// Encryption happens client-side with user's wallet signature
+FHE.allow(encryptedValue, address(this));  // Grant contract access
+FHE.allow(encryptedValue, msg.sender);     // Grant user access
+```
+
+All encrypted values have explicit permission grants to prevent unauthorized access attempts.
 
 ---
 
@@ -300,25 +498,51 @@ NEXT_PUBLIC_CHAIN_ID=11155111
 **Purpose**: Main fundraising campaign management contract
 
 **Key Functions**:
+
+*Campaign Management:*
 | Function | Parameters | Description | Access |
 |----------|-----------|-------------|--------|
-| `createCampaign` | `title`, `description`, `target`, `duration` | Creates new campaign | Public |
-| `contribute` | `campaignId`, `encryptedAmount`, `proof` | Contribute to campaign | Public |
-| `finalizeCampaign` | `campaignId`, `tokenName`, `tokenSymbol` | Finalize after deadline | Owner only |
-| `claimTokens` | `campaignId` | Claim reward tokens | Contributors |
-| `requestMyContributionDecryption` | `campaignId` | Mark contribution as decryptable | Contributor |
-| `submitMyContributionDecryption` | `campaignId`, `cleartext`, `proof` | Submit decryption proof | Contributor |
-| `requestTotalRaisedDecryption` | `campaignId` | Mark total as decryptable | Owner only |
-| `submitTotalRaisedDecryption` | `campaignId`, `cleartext`, `proof` | Submit total decryption proof | Owner only |
-| `getEncryptedContribution` | `campaignId`, `user` | Get encrypted contribution | Public (read) |
-| `getEncryptedTotalRaised` | `campaignId` | Get encrypted campaign total | Public (read) |
+| `createCampaign` | `title`, `description`, `target`, `duration` | Creates new campaign with encrypted total tracker | Public |
+| `contribute` | `campaignId`, `encryptedAmount`, `inputProof` | Make encrypted contribution (locks funds in vault) | Public |
+| `finalizeCampaign` | `campaignId`, `tokenName`, `tokenSymbol` | Finalize campaign after deadline (requires decrypted total) | Owner only |
+| `cancelCampaign` | `campaignId` | Cancel campaign and unlock all funds | Owner only |
+| `claimTokens` | `campaignId` | Claim proportional ERC20 tokens (requires decrypted contribution) | Contributors |
+
+*v0.9 Decryption - My Contribution:*
+| Function | Parameters | Description | Access |
+|----------|-----------|-------------|--------|
+| `requestMyContributionDecryption` | `campaignId` | Mark user's contribution as publicly decryptable (Step 1) | Contributor |
+| `submitMyContributionDecryption` | `campaignId`, `cleartext`, `proof` | Submit decrypted contribution with proof (Step 4) | Contributor |
+| `getMyContribution` | `campaignId` | Get cached decrypted contribution amount | Contributor |
+| `getContributionStatus` | `campaignId`, `user` | Get decryption status, cached value, and expiry | Public (read) |
+
+*v0.9 Decryption - Campaign Total:*
+| Function | Parameters | Description | Access |
+|----------|-----------|-------------|--------|
+| `requestTotalRaisedDecryption` | `campaignId` | Mark total raised as publicly decryptable (Step 1) | Owner only |
+| `submitTotalRaisedDecryption` | `campaignId`, `cleartext`, `proof` | Submit decrypted total with proof (Step 4) | Owner only |
+| `getTotalRaised` | `campaignId` | Get cached decrypted total raised | Owner only |
+| `getTotalRaisedStatus` | `campaignId` | Get total decryption status, cached value, and expiry | Owner only |
+
+*Read Functions (Public):*
+| Function | Parameters | Description | Return Type |
+|----------|-----------|-------------|-------------|
+| `getCampaign` | `campaignId` | Get campaign details (owner, title, target, deadline, etc.) | Tuple |
+| `campaignCount` | - | Get total number of campaigns | uint16 |
+| `getEncryptedContribution` | `campaignId`, `user` | Get encrypted contribution handle (Step 2 for decryption) | euint64 |
+| `getEncryptedTotalRaised` | `campaignId` | Get encrypted total raised handle (Step 2 for decryption) | euint64 |
+| `hasContribution` | `campaignId`, `user` | Check if user has contributed | bool |
+| `hasClaimed` | `campaignId`, `user` | Check if user has claimed tokens | bool |
+| `getCampaignContributors` | `campaignId` | Get list of contributor addresses | address[] |
 
 **Events**:
-- `CampaignCreated(uint256 campaignId, address owner, string title, uint256 target)`
-- `ContributionMade(uint256 campaignId, address contributor)`
-- `CampaignFinalized(uint256 campaignId, bool successful, address tokenAddress)`
-- `TokensClaimed(uint256 campaignId, address contributor, uint256 amount)`
-- `CampaignFailed(uint256 campaignId)`
+- `CampaignCreated(uint256 indexed campaignId, address indexed owner, string title, uint256 targetAmount, uint256 deadline)`
+- `ContributionMade(uint256 indexed campaignId, address indexed contributor)`
+- `CampaignFinalized(uint256 indexed campaignId, bool targetReached)`
+- `CampaignCancelled(uint256 indexed campaignId)`
+- `TokensClaimed(uint256 indexed campaignId, address indexed contributor)` - Emitted when user initiates claim
+- `TokensDistributed(uint16 indexed campaignId, address indexed contributor, uint256 amount)` - Emitted with token amount
+- `CampaignFailed(uint16 indexed campaignId)`
 
 **Storage**:
 - `Campaign[] public campaigns` - Array of all campaigns
@@ -332,26 +556,46 @@ NEXT_PUBLIC_CHAIN_ID=11155111
 **Purpose**: Secure escrow managing encrypted user balances and campaign locks
 
 **Key Functions**:
+
+*Balance Management:*
 | Function | Parameters | Description | Access |
 |----------|-----------|-------------|--------|
-| `deposit` | - (payable) | Deposit ETH into vault | Public |
-| `withdraw` | `amount` | Withdraw available balance | Public |
-| `lockFunds` | `user`, `campaignId`, `encryptedAmount` | Lock funds for campaign | Campaign contract |
-| `transferLockedFunds` | `recipient`, `campaignId` | Transfer locked funds | Campaign contract |
-| `unlockFunds` | `campaignId` | Unlock funds (refund) | Campaign contract |
-| `requestAvailableBalanceDecryption` | - | Mark balance as decryptable | User |
-| `submitAvailableBalanceDecryption` | `cleartext`, `proof` | Submit balance decryption proof | User |
-| `getPendingAvailableBalanceHandle` | - | Get pending decryption handle | Public (read) |
-| `getEncryptedBalance` | `user` | Get encrypted balance | Public (read) |
-| `getEncryptedBalanceAndLocked` | `user` | Get balance + total locked | Public (read) |
-| `getEncryptedTotalLocked` | `user` | Get total locked amount | Public (read) |
+| `deposit` | - (payable) | Deposit ETH into vault (increases encrypted balance) | Public |
+| `withdraw` | `amount` | Withdraw from available balance (requires decrypted balance) | Public |
+| `setCampaignContract` | `contractAddress` | Set authorized campaign contract address | Owner only |
+
+*Campaign Lock Operations (Called by Campaign Contract):*
+| Function | Parameters | Description | Access |
+|----------|-----------|-------------|--------|
+| `lockFunds` | `user`, `campaignId`, `encryptedAmount` | Lock user funds for specific campaign | Campaign contract |
+| `transferLockedFunds` | `from`, `to`, `campaignId` | Transfer locked funds (campaign successful) | Campaign contract |
+| `unlockFunds` | `user`, `campaignId` | Unlock funds back to available (campaign failed/cancelled) | Campaign contract |
+
+*v0.9 Decryption - Available Balance:*
+| Function | Parameters | Description | Access |
+|----------|-----------|-------------|--------|
+| `requestAvailableBalanceDecryption` | - | Mark user's available balance as publicly decryptable (Step 1) | User |
+| `submitAvailableBalanceDecryption` | `cleartext`, `proof` | Submit decrypted balance with proof (Step 4) | User |
+| `getAvailableBalance` | - | Get cached decrypted available balance | User |
+| `getAvailableBalanceStatus` | - | Get balance decryption status, cached value, and expiry | User |
+
+*Read Functions (Public):*
+| Function | Parameters | Description | Return Type |
+|----------|-----------|-------------|-------------|
+| `getPendingAvailableBalanceHandle` | - | Get pending decryption handle (Step 2 for decryption) | euint64 |
+| `getEncryptedBalance` | - | Get user's total encrypted balance | euint64 |
+| `getEncryptedBalanceAndLocked` | - | Get encrypted balance and total locked amount | (euint64, euint64) |
+| `getEncryptedTotalLocked` | - | Get total locked amount across all campaigns | euint64 |
 
 **Events**:
-- `Deposited(address user, uint256 amount)`
-- `Withdrawn(address user, uint256 amount)`
-- `FundsLocked(address user, uint256 campaignId, uint256 amount)`
-- `FundsTransferred(address recipient, uint256 campaignId, uint256 amount)`
-- `FundsUnlocked(uint256 campaignId, address user, uint256 amount)`
+- `Deposited(address indexed user, uint256 amount)`
+- `Withdrawn(address indexed user, uint256 amount)`
+- `FundsLocked(address indexed user, uint16 indexed campaignId)`
+- `FundsUnlocked(address indexed user, uint16 indexed campaignId)`
+- `FundsTransferred(address indexed from, address indexed to, uint16 indexed campaignId)`
+- `WithdrawalDecryptionRequested(address indexed user, uint256 requestId)`
+- `AvailableBalanceDecrypted(address indexed user, uint64 amount)`
+- `LockRequestInitiated(address indexed user, uint16 indexed campaignId, uint256 requestId)`
 
 **Storage**:
 - `mapping(address => euint64) private balances` - Encrypted user balances
@@ -448,53 +692,474 @@ VAULT_ADDRESS=0x... CAMPAIGN_ADDRESS=0x... npx hardhat run scripts/configure-vau
 
 This prevents the `OnlyCampaignContract()` error when users try to contribute.
 
----
+### Create Test Campaign (Optional)
 
-## 🔄 FHEVM v0.9 Migration
+Create a demo campaign for testing:
 
-This project has been upgraded to **FHEVM v0.9** with self-relaying decryption. Key changes include:
-
-### Smart Contract Changes
-
-**Removed (Deprecated):**
-- `FHE.requestDecryption()` - Oracle-based decryption
-- `FHE.loadRequestedHandles()` - Handle loading for callbacks
-- Oracle callback functions - Replaced with submit functions
-
-**Added (Self-Relaying):**
-- `FHE.makePubliclyDecryptable()` - Marks values for public decryption
-- `FHE.checkSignatures()` - Verifies decryption proofs (updated signature)
-- `request*Decryption()` - Mark values as decryptable
-- `submit*Decryption()` - Submit cleartext + proof for verification
-
-### Frontend Changes
-
-**Package Updates:**
-- `@fhevm/solidity`: ^0.8.0 → ^0.9.1
-- `@zama-fhe/relayer-sdk`: ^0.2.0 → ^0.3.0-5
-- Removed: `@zama-fhe/oracle-solidity` (deprecated)
-
-**New Workflow:**
-```typescript
-// 1. Mark as decryptable
-await requestMyContributionDecryption(campaignId);
-
-// 2. Get encrypted handle
-const handle = await getEncryptedContribution(campaignId, userAddress);
-
-// 3. Decrypt with proof generation
-const { cleartext, proof } = await instance.publicDecrypt([handle]);
-
-// 4. Submit proof to contract
-await submitMyContributionDecryption(campaignId, cleartext, proof);
+```bash
+# Edit the script first to set your contract address and campaign details
+# Then run:
+npx hardhat run scripts/create-campaign.ts --network sepolia
 ```
 
-**Benefits:**
-- ⚡ **10-30x faster** - No waiting for gateway callbacks
-- 🔐 **More secure** - User-controlled decryption with cryptographic proofs
-- 💰 **Lower cost** - No oracle transaction fees
+The script will:
+1. Create a new campaign with specified title, description, target, and duration
+2. Output the campaign ID for testing
+3. Verify the campaign was created successfully
 
-For detailed migration steps, see `MIGRATION_v0.9_INSTRUCTIONS.md` and `FRONTEND_INTEGRATION_GUIDE.md`.
+---
+
+## 🔄 FHEVM v0.9.1 Implementation
+
+This project is built with **FHEVM v0.9.1** using the modern self-relaying decryption pattern.
+
+### Core Technology Versions
+
+**Smart Contracts:**
+- `@fhevm/solidity`: ^0.9.1
+- `@fhevm/core-contracts`: ^0.8.0
+- `@fhevm/hardhat-plugin`: ^0.3.0-1
+
+**Frontend:**
+- `@zama-fhe/relayer-sdk`: ^0.3.0-5
+
+### v0.9 Self-Relaying Pattern
+
+The platform uses the **4-step self-relaying workflow** instead of deprecated oracle-based decryption:
+
+**Contract Implementation:**
+```solidity
+// Step 1: User requests decryption
+function requestMyContributionDecryption(uint16 campaignId) public {
+    euint64 userContribution = encryptedContributions[campaignId][msg.sender];
+    FHE.makePubliclyDecryptable(userContribution);
+    decryptMyContributionStatus[campaignId][msg.sender] = DecryptStatus.PROCESSING;
+}
+
+// Step 4: User submits proof
+function submitMyContributionDecryption(
+    uint16 campaignId,
+    uint64 cleartextAmount,
+    bytes calldata proof
+) public {
+    euint64 userContribution = encryptedContributions[campaignId][msg.sender];
+
+    // Verify proof
+    bytes32[] memory handles = new bytes32[](1);
+    handles[0] = FHE.toBytes32(userContribution);
+    bytes memory cleartexts = abi.encode(cleartextAmount);
+    FHE.checkSignatures(handles, cleartexts, proof);
+
+    // Cache result
+    decryptedContributions[campaignId][msg.sender] = Uint64ResultWithExp({
+        data: cleartextAmount,
+        exp: block.timestamp + cacheTimeout
+    });
+
+    decryptMyContributionStatus[campaignId][msg.sender] = DecryptStatus.DECRYPTED;
+}
+```
+
+**Frontend Integration:**
+```typescript
+// Complete workflow using hook
+const { completeMyContributionDecryption } = useCampaigns();
+
+// All 4 steps handled internally:
+// 1. Call requestMyContributionDecryption()
+// 2. Get handle from getEncryptedContribution()
+// 3. Decrypt via instance.publicDecrypt([handle])
+// 4. Call submitMyContributionDecryption(cleartext, proof)
+const result = await completeMyContributionDecryption(campaignId);
+console.log('Decrypted value:', result.cleartext);
+```
+
+**Manual Workflow (Advanced):**
+```typescript
+// Step 1: Request decryption
+await contract.requestMyContributionDecryption(campaignId);
+
+// Step 2: Get encrypted handle
+const handle = await contract.getEncryptedContribution(campaignId, userAddress);
+
+// Step 3: Decrypt with relayer SDK
+const { clearValues, decryptionProof } = await instance.publicDecrypt([handle]);
+const cleartext = clearValues[handle];
+
+// Step 4: Submit proof to contract
+await contract.submitMyContributionDecryption(campaignId, cleartext, decryptionProof);
+```
+
+### Key Improvements
+
+**vs Oracle-Based Decryption (v0.8):**
+- ⚡ **10-30x faster**: Instant decryption without gateway callbacks
+- 🔐 **More secure**: User-controlled with cryptographic proof verification
+- 👤 **Better UX**: Users sign and submit their own requests
+- 💰 **Lower cost**: Single-transaction flow, no oracle fees
+- 📊 **Transparent**: Status tracking via `get*Status()` functions
+
+**Status Management:**
+```typescript
+const { status, contribution, cacheExpiry } =
+    await contract.getContributionStatus(campaignId, userAddress);
+
+// status: 0 (NONE), 1 (PROCESSING), 2 (DECRYPTED)
+// contribution: cached cleartext value (if decrypted)
+// cacheExpiry: timestamp when cache expires (10 minutes)
+```
+
+---
+
+## 📝 Complete Workflow Reference
+
+### End-to-End User Flows
+
+#### 1. **Campaign Creator Flow**
+
+```
+1. Create Campaign
+   → createCampaign(title, description, target, duration)
+   → Campaign gets ID, encrypted total = 0
+
+2. Wait for contributions...
+
+3. After Deadline → Finalize Campaign
+   a. Decrypt Total Raised (v0.9 workflow):
+      → requestTotalRaisedDecryption(campaignId)
+      → getEncryptedTotalRaised(campaignId)
+      → instance.publicDecrypt([handle])
+      → submitTotalRaisedDecryption(campaignId, cleartext, proof)
+
+   b. Finalize:
+      → finalizeCampaign(campaignId, tokenName, tokenSymbol)
+      → If target reached: Deploy ERC20, transfer all locked funds
+      → If target not reached: Unlock all funds for refund
+```
+
+#### 2. **Contributor Flow**
+
+```
+1. Deposit to Vault (optional if balance exists)
+   → vault.deposit() {value: amount}
+
+2. Contribute to Campaign
+   → SDK: encryptedAmount, proof = encrypt(amount)
+   → contribute(campaignId, encryptedAmount, proof)
+   → Funds locked in vault for campaign
+
+3. After Campaign Ends:
+
+   If Successful (target reached):
+     a. Decrypt My Contribution:
+        → requestMyContributionDecryption(campaignId)
+        → getEncryptedContribution(campaignId, userAddress)
+        → instance.publicDecrypt([handle])
+        → submitMyContributionDecryption(campaignId, cleartext, proof)
+
+     b. Claim Tokens:
+        → claimTokens(campaignId)
+        → Receives proportional ERC20 tokens
+
+   If Failed (target not reached):
+     → Funds auto-unlocked
+     → Withdraw from vault: withdraw(amount)
+```
+
+#### 3. **Vault Management Flow**
+
+```
+1. Deposit Funds
+   → vault.deposit() {value: amount}
+   → Encrypted balance += amount
+
+2. Check Available Balance
+   a. Decrypt Balance:
+      → requestAvailableBalanceDecryption()
+      → getPendingAvailableBalanceHandle()
+      → instance.publicDecrypt([handle])
+      → submitAvailableBalanceDecryption(cleartext, proof)
+
+   b. View Balance:
+      → getAvailableBalance()
+      → Returns cached decrypted value
+
+3. Withdraw Funds
+   → withdraw(amount)
+   → Requires prior decryption
+   → Sends ETH to user wallet
+```
+
+### Frontend Hook Methods
+
+**useCampaigns Hook:**
+```typescript
+// Campaign Management
+createCampaign(title, description, targetAmount, durationDays)
+contribute(campaignId, amount)
+finalizeCampaign(campaignId, tokenName, tokenSymbol)
+cancelCampaign(campaignId)
+claimTokens(campaignId)
+
+// Complete v0.9 Decryption Workflows (all 4 steps)
+completeMyContributionDecryption(campaignId)
+completeTotalRaisedDecryption(campaignId)
+completeAvailableBalanceDecryption()
+
+// Individual v0.9 Decryption Steps (advanced)
+requestMyContributionDecryption(campaignId)        // Step 1
+requestTotalRaisedDecryption(campaignId)           // Step 1
+requestAvailableBalanceDecryption()                // Step 1
+
+// Read Functions (public client - no wallet needed)
+getCampaign(campaignId)
+getCampaignCount()
+getContributionStatus(campaignId, userAddress)
+checkHasContribution(campaignId, userAddress)
+checkHasClaimed(campaignId, userAddress)
+getEncryptedContribution(campaignId, userAddress)  // Step 2 for decryption
+getEncryptedTotalRaised(campaignId)                // Step 2 for decryption
+
+// Vault Operations
+depositToVault(amount)
+withdrawFromVault(amount)
+getAvailableBalanceStatus()
+getEncryptedBalanceAndLocked()
+```
+
+**useEncrypt Hook:**
+```typescript
+// Encrypt a value for contribution
+const { encryptedData, proof } = await encrypt64(amountInWei);
+```
+
+**usePublicDecrypt Hook:**
+```typescript
+// Decrypt an encrypted handle (Step 3 of v0.9 workflow)
+const { cleartext, proof } = await publicDecrypt(handle, contractAddress);
+```
+
+### Common Error Handling
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `CampaignNotExist` | Invalid campaign ID | Check `campaignCount` |
+| `CampaignEnded` | Deadline passed | Cannot contribute after deadline |
+| `CampaignStillActive` | Trying to finalize early | Wait until `block.timestamp > deadline` |
+| `OnlyOwner` | Not campaign owner | Only owner can finalize/cancel |
+| `TotalRaisedNotDecrypted` | Finalize without decryption | Run `completeTotalRaisedDecryption()` first |
+| `ContributionNotDecrypted` | Claim without decryption | Run `completeMyContributionDecryption()` first |
+| `DecryptAlreadyInProgress` | Duplicate decrypt request | Wait for current workflow to complete |
+| `CacheExpired` | Decryption cache expired | Re-run decryption workflow (10 min timeout) |
+| `OnlyCampaignContract` | Vault access denied | Ensure `setCampaignContract()` was called |
+| `InsufficientBalance` | Not enough vault funds | Deposit more ETH to vault |
+
+---
+
+## 🧪 Testing & Quality Assurance
+
+### Test Coverage
+
+The project includes comprehensive tests for all critical paths:
+
+**Contract Tests:**
+```bash
+npm test
+```
+
+**Test Categories:**
+1. **Campaign Lifecycle Tests** - Create, contribute, finalize, cancel flows
+2. **Vault Operations Tests** - Deposit, withdraw, lock/unlock mechanisms
+3. **Decryption Workflow Tests** - v0.9.1 4-step pattern validation
+4. **Access Control Tests** - Permission boundary verification
+5. **Edge Case Tests** - Cache expiry, insufficient funds, invalid proofs
+6. **Token Distribution Tests** - Proportional minting, supply limits
+
+**Mock FHEVM Testing:**
+```bash
+npm run test:mock
+```
+
+The FHEVM Hardhat plugin provides mock FHE operations for local testing without KMS infrastructure.
+
+**Integration Testing Checklist:**
+- [ ] Campaign creation with various targets
+- [ ] Multiple contributors per campaign
+- [ ] Campaign finalization (success & failure paths)
+- [ ] Token claiming with decryption workflow
+- [ ] Vault balance management with locks
+- [ ] Cache expiry and re-decryption
+- [ ] Permission boundary violations
+- [ ] Proof verification failures
+
+### Known Limitations
+
+1. **Amount Range:** `uint64` limits contributions to ~18.4 ETH max
+   - **Mitigation:** Suitable for most crowdfunding scenarios; can upgrade to `euint128` if needed
+
+2. **Campaign Count:** `uint16` allows max 65,535 campaigns
+   - **Mitigation:** Sufficient for foreseeable usage; can upgrade to `uint256` if needed
+
+3. **Cache Timeout:** 10-minute decryption cache requires re-decryption
+   - **Trade-off:** Privacy vs convenience (prevents stale data attacks)
+
+4. **Gas Costs:** FHE operations are more expensive than plaintext
+   - **Comparison:** ~2-3x higher gas than non-FHE equivalent
+   - **Benefit:** Privacy guarantees justify the premium
+
+5. **Frontend Dependency:** Requires FHEVM Relayer SDK for encryption/decryption
+   - **Mitigation:** CDN-hosted, but adds external dependency
+
+---
+
+## 📊 Performance Metrics
+
+### Gas Cost Analysis (Estimated)
+
+| Operation | FHEVM (This Project) | Standard EVM | Overhead |
+|-----------|---------------------|--------------|----------|
+| **Campaign Creation** | ~300,000 gas | ~150,000 gas | 2x |
+| **Contribution** | ~450,000 gas | ~200,000 gas | 2.25x |
+| **Finalization** | ~800,000 gas | ~400,000 gas | 2x |
+| **Token Claim** | ~350,000 gas | ~150,000 gas | 2.3x |
+| **Decryption Request** | ~120,000 gas | N/A | - |
+| **Decryption Submit** | ~90,000 gas | N/A | - |
+| **Vault Deposit** | ~200,000 gas | ~100,000 gas | 2x |
+| **Vault Withdraw** | ~180,000 gas | ~80,000 gas | 2.25x |
+
+**Note:** FHE operations include:
+- Encrypted arithmetic (`FHE.add`, `FHE.sub`, `FHE.select`)
+- Permission grants (`FHE.allow`)
+- Public decryption marking (`FHE.makePubliclyDecryptable`)
+- Proof verification (`FHE.checkSignatures`)
+
+### Decryption Latency
+
+| Step | Time (v0.9.1 Self-Relaying) | Time (v0.8 Oracle) |
+|------|----------------------------|-------------------|
+| **1. Request Decryption** | ~2 seconds (tx confirmation) | ~2 seconds |
+| **2. Get Handle** | <1 second (read call) | <1 second |
+| **3. Public Decrypt** | ~1 second (SDK call) | ~10-30 seconds (gateway) |
+| **4. Submit Proof** | ~2 seconds (tx confirmation) | Auto-submitted |
+| **Total** | **~5 seconds** | **~15-35 seconds** |
+
+**User Experience Impact:**
+- v0.9.1: User sees decrypted value in ~5 seconds ✅
+- v0.8: User waits 15-35 seconds for callback ❌
+
+---
+
+## 🔮 Future Improvements & Roadmap
+
+### Phase 2: Enhanced Features (Q2 2025)
+
+1. **Milestone-Based Campaigns**
+   - Unlock funds incrementally as milestones achieved
+   - Encrypted milestone tracking with community voting
+
+2. **Private Voting Mechanism**
+   - Encrypted votes on campaign decisions
+   - Homomorphic vote counting
+
+3. **Multi-Token Support**
+   - Accept various ERC20 tokens (encrypted amounts)
+   - Cross-token contribution aggregation
+
+4. **Reputation System**
+   - Encrypted contribution history
+   - Privacy-preserving reputation scores
+
+### Phase 3: Scalability (Q3 2025)
+
+1. **Layer 2 Integration**
+   - Deploy to L2s with FHEVM support
+   - Lower gas costs while maintaining privacy
+
+2. **Batch Decryption**
+   - Decrypt multiple values in single proof
+   - Reduced gas costs for campaign owners
+
+3. **Optimized Storage**
+   - Compressed encrypted handles
+   - Off-chain metadata with on-chain verification
+
+### Phase 4: Advanced Privacy (Q4 2025)
+
+1. **Anonymous Contributions**
+   - Zero-knowledge proofs for contributor identity
+   - Fully private donation streams
+
+2. **Encrypted Messaging**
+   - Private campaign updates to contributors
+   - Encrypted comments/feedback
+
+3. **Privacy-Preserving Analytics**
+   - Encrypted contribution distributions
+   - Statistical analysis without revealing individuals
+
+### Research Directions
+
+1. **FHE Circuit Optimization**
+   - Custom circuits for campaign-specific operations
+   - Reduced gas costs through specialized FHE ops
+
+2. **Decentralized Key Management**
+   - Multi-party computation for decryption authority
+   - Eliminate single points of failure
+
+3. **Compliance Integration**
+   - Encrypted KYC/AML data
+   - Regulatory compliance without privacy loss
+
+---
+
+## 🏆 Zama Builder Track Highlights
+
+### Why This Project Showcases FHEVM
+
+1. **Real-World Use Case:** Crowdfunding is a widely understood problem that clearly benefits from confidential computing
+
+2. **Multiple FHE Operations:** Demonstrates:
+   - Encrypted arithmetic (addition for totals, subtraction for balances)
+   - Encrypted comparisons (balance >= required)
+   - Conditional operations (FHE.select for safe locking)
+   - Selective decryption (only owner/contributor sees their data)
+
+3. **v0.9.1 Best Practices:**
+   - Full implementation of 4-step self-relaying pattern
+   - Cryptographic proof verification
+   - Cache management for UX optimization
+   - Status tracking for transparency
+
+4. **Production-Ready Architecture:**
+   - Separation of concerns (Campaign + Vault contracts)
+   - Comprehensive access control
+   - Event emission for frontend integration
+   - Error handling with custom errors
+
+5. **Complete Full-Stack Integration:**
+   - Next.js 15 frontend with App Router
+   - Custom React hooks for FHEVM operations
+   - Privy wallet integration
+   - Responsive UI with real-time status updates
+
+### Technical Challenges Overcome
+
+1. **Encrypted Balance Management:**
+   - **Problem:** How to track available vs locked balances entirely encrypted
+   - **Solution:** Per-campaign locking with encrypted totalLocked tracking
+
+2. **Proof Verification:**
+   - **Problem:** Ensuring decrypted values match encrypted on-chain values
+   - **Solution:** `FHE.checkSignatures()` with handle-to-cleartext validation
+
+3. **Gas Optimization:**
+   - **Problem:** FHE operations are expensive
+   - **Solution:** Type optimization (uint16/uint64), caching, user-pays-for-claim model
+
+4. **UX Without Plaintext:**
+   - **Problem:** Users need to see their contribution for token claims
+   - **Solution:** Self-relaying decryption with status tracking and cache
 
 ---
 

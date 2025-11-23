@@ -7,37 +7,59 @@ config:
 sequenceDiagram
     participant U as 👤 User
     participant F as 🎨 Frontend
-    participant SDK as 🔐 FHEVM SDK
+    participant R as 🔐 Relayer SDK
     participant SV as 💰 ShareVault
 
     rect rgb(240, 248, 255)
-        Note over U,SV: Check Balance
+        Note over U,SV: Check Available Balance (v0.9 Self-Relaying)
+
+        Note over F,SV: Step 1: Request Decryption
         U->>F: View vault balance
-        F->>SV: getEncryptedBalance()
-        SV-->>F: encryptedBalance
+        F->>SV: requestAvailableBalanceDecryption()
+        SV->>SV: FHE.makePubliclyDecryptable(availableBalance)
+        SV->>SV: Set status = PROCESSING
+        SV-->>F: ✅ Marked as decryptable
+
+        Note over F,SV: Step 2: Get Encrypted Handle
+        F->>SV: getPendingAvailableBalanceHandle()
+        SV-->>F: encryptedHandle
+
+        Note over F,R: Step 3: Public Decrypt with Proof
+        F->>R: instance.publicDecrypt([handle])
+        R->>R: Decrypt + generate proof
+        R-->>F: { cleartext, proof }
+
+        Note over F,SV: Step 4: Submit Proof
+        F->>SV: submitAvailableBalanceDecryption(cleartext, proof)
+        SV->>SV: FHE.checkSignatures(handle, cleartext, proof)
+        SV->>SV: Cache cleartext, set status = DECRYPTED
+        SV-->>F: ✅ Decryption verified & cached
+
+        F->>SV: getAvailableBalance()
+        SV-->>F: Cached decrypted available balance
+
         F->>SV: getEncryptedTotalLocked()
         SV-->>F: encryptedLocked
 
-        par Decrypt Balance
-            F->>SDK: Decrypt balance
-            SDK-->>F: decryptedBalance
-        and Decrypt Locked
-            F->>SDK: Decrypt locked
-            SDK-->>F: decryptedLocked
-        end
+        Note over F,R: (Optional) Decrypt locked amount
+        F->>R: instance.publicDecrypt([lockedHandle])
+        R-->>F: { cleartext: lockedAmount }
 
-        F->>F: Calculate available:<br/>available = balance - locked
+        F->>F: Calculate:<br/>Total = available + locked
         F-->>U: Show balance breakdown
     end
 
     rect rgb(240, 255, 240)
         Note over U,SV: Withdraw Funds
         U->>F: Enter withdrawal amount
-        F->>F: Verify amount <= available
+        F->>F: Verify amount <= cached available balance
         F->>SV: withdraw(amount)
-        SV->>SV: Verify sufficient balance
+        SV->>SV: Read cached decrypted balance
+        SV->>SV: Verify sufficient available balance
         SV->>SV: Update encrypted balance
         SV->>U: Transfer ETH
         SV-->>F: ✅ Withdrawal successful
         F-->>U: "✅ Withdrawal complete"
     end
+
+    Note over SV: Cache expires after 10 minutes<br/>Must re-decrypt for fresh balance

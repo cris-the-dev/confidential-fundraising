@@ -7,7 +7,7 @@ config:
 sequenceDiagram
     participant U as 👤 Campaign Owner
     participant F as 🎨 Frontend
-    participant SDK as 🔐 FHEVM SDK
+    participant R as 🔐 Relayer SDK
     participant CF as 📝 ConfidentialFundraising
     participant SV as 💰 ShareVault
     participant CT as 🪙 CampaignToken
@@ -15,31 +15,57 @@ sequenceDiagram
     U->>F: Click "Finalize Campaign"
     F->>F: Check deadline passed
 
-    F->>CF: getEncryptedTotalRaised(campaignId)
-    CF-->>F: encryptedTotal
-    F->>SDK: Decrypt total amount
-    SDK-->>F: decryptedTotal
+    rect rgb(255, 250, 240)
+        Note over U,CF: v0.9 Self-Relaying Decryption (4 Steps)
+
+        Note over F,CF: Step 1: Request Decryption
+        F->>CF: requestTotalRaisedDecryption(campaignId)
+        CF->>CF: FHE.makePubliclyDecryptable(totalRaised)
+        CF->>CF: Set status = PROCESSING
+        CF-->>F: ✅ Marked as decryptable
+
+        Note over F,CF: Step 2: Get Encrypted Handle
+        F->>CF: getEncryptedTotalRaised(campaignId)
+        CF-->>F: encryptedHandle
+
+        Note over F,R: Step 3: Public Decrypt with Proof
+        F->>R: instance.publicDecrypt([handle])
+        R->>R: Decrypt + generate proof
+        R-->>F: { cleartext, proof }
+
+        Note over F,CF: Step 4: Submit Proof
+        F->>CF: submitTotalRaisedDecryption(campaignId, cleartext, proof)
+        CF->>CF: FHE.checkSignatures(handle, cleartext, proof)
+        CF->>CF: Cache cleartext, set status = DECRYPTED
+        CF-->>F: ✅ Decryption verified & cached
+    end
 
     F->>F: Display total to owner
     U->>F: Confirm finalization<br/>(provide token name & symbol)
 
     F->>CF: finalizeCampaign(campaignId, tokenName, tokenSymbol)
+    CF->>CF: Read cached decrypted total
 
     alt Target Reached ✅
         CF->>CT: Deploy new CampaignToken
         CT-->>CF: Token contract address
-        CF->>SV: transferLockedFunds(owner, campaignId)
-        SV->>SV: Calculate total locked for campaign
-        SV->>SV: Unlock all contributor funds
-        SV->>SV: Transfer ETH to owner
-        SV-->>CF: ✅ Funds transferred
+
+        loop For each contributor
+            CF->>SV: transferLockedFunds(contributor, owner, campaignId)
+            SV->>SV: Transfer locked funds to owner
+            SV-->>CF: ✅ Funds transferred
+        end
+
         CF->>CF: Mark campaign successful
         CF-->>F: ✅ Campaign finalized successfully
         F-->>U: "🎉 Campaign successful!<br/>Contributors can claim tokens"
     else Target Not Reached ❌
-        CF->>SV: unlockFunds(campaignId)
-        SV->>SV: Unlock all contributor funds
-        SV-->>CF: ✅ Funds unlocked
+        loop For each contributor
+            CF->>SV: unlockFunds(contributor, campaignId)
+            SV->>SV: Unlock funds back to available
+            SV-->>CF: ✅ Funds unlocked
+        end
+
         CF->>CF: Mark campaign failed
         CF-->>F: ❌ Campaign failed
         F-->>U: "Campaign failed.<br/>Refunds available to contributors"

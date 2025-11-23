@@ -4,27 +4,34 @@ config:
   theme: neutral
 ---
 
-graph LR
+graph TB
     subgraph "📤 Encryption Process"
-        A[Plain Value<br/>e.g., 100 ETH] --> B[FHEVM SDK<br/>Encrypt]
+        A[Plain Value<br/>e.g., 100 ETH] --> B[FHEVM SDK<br/>createEncryptedInput]
         B --> C[Encrypted Value<br/>euint64]
-        B --> D[Proof<br/>ZK Proof]
-        C --> E[Smart Contract]
+        B --> D[Input Proof<br/>ZK Proof]
+        C --> E[Smart Contract<br/>Store On-Chain]
         D --> E
     end
 
-    subgraph "📥 Decryption Process"
-        F[Smart Contract] --> G[getEncrypted...<br/>Read Function]
-        G --> H[Encrypted Value]
-        H --> I[FHEVM SDK<br/>Client-Side Decrypt]
-        I --> J[Verify Permissions]
-        J --> K[Plain Value<br/>100 ETH]
+    subgraph "📥 v0.9 Self-Relaying Decryption Process"
+        F[User Initiates<br/>Decryption] --> G[1. Request<br/>Decryption]
+        G --> H[Contract Call<br/>request*Decryption]
+        H --> I[FHE.makePubliclyDecryptable<br/>Status: PROCESSING]
+        I --> J[2. Get Encrypted<br/>Handle]
+        J --> K[Contract Read<br/>getEncrypted*]
+        K --> L[3. Public Decrypt<br/>via Relayer SDK]
+        L --> M[instance.publicDecrypt<br/>Returns cleartext + proof]
+        M --> N[4. Submit Proof]
+        N --> O[Contract Call<br/>submit*Decryption]
+        O --> P[FHE.checkSignatures<br/>Verify proof]
+        P --> Q[✅ Cache Cleartext<br/>Status: DECRYPTED]
     end
 
-    E -.Stored On-Chain.-> F
+    E -.Encrypted Data<br/>Stored On-Chain.-> F
 
     style A fill:#ffcccc,stroke:#333,stroke-width:2px
-    style K fill:#ccffcc,stroke:#333,stroke-width:2px
+    style Q fill:#ccffcc,stroke:#333,stroke-width:2px
     style E fill:#cce5ff,stroke:#333,stroke-width:2px
-    style F fill:#cce5ff,stroke:#333,stroke-width:2px
-    style I fill:#ffd700,stroke:#333,stroke-width:3px
+    style I fill:#cce5ff,stroke:#333,stroke-width:2px
+    style M fill:#ffd700,stroke:#333,stroke-width:3px
+    style P fill:#ff9966,stroke:#333,stroke-width:2px
