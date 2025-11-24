@@ -72,14 +72,14 @@ The campaign owner can decrypt `Total` without ever seeing `eA`, `eB`, or `eC` i
 
 ### Key Features
 
-- **🔒 Private Contributions**: All contribution amounts are encrypted using FHEVM technology
-- **🎯 Goal-Based Campaigns**: Campaigns have targets and deadlines
-- **🪙 Token Rewards**: Successful campaigns distribute ERC20 tokens proportionally to contributors
-- **💰 Automatic Refunds**: Failed campaigns automatically refund contributors
-- **🔐 Secure Escrow**: ShareVault contract manages all funds with encrypted balance tracking
-- **⚡ Self-Relaying Decryption**: Instant decryption with cryptographic proofs (FHEVM v0.9)
-- **🎭 Zero-Knowledge**: Campaign totals remain private until authorized decryption
-- **🚀 User-Controlled**: Contributors sign and submit their own decryption requests
+- **Private Contributions**: All contribution amounts are encrypted using FHEVM technology
+- **Goal-Based Campaigns**: Campaigns have targets and deadlines
+- **Token Rewards**: Successful campaigns distribute ERC20 tokens proportionally to contributors
+- **Automatic Refunds**: Failed campaigns automatically refund contributors
+- **Secure Escrow**: ShareVault contract manages all funds with encrypted balance tracking
+- **Self-Relaying Decryption**: Instant decryption with cryptographic proofs (FHEVM v0.9)
+- **Zero-Knowledge**: Campaign totals remain private until authorized decryption
+- **User-Controlled**: Contributors sign and submit their own decryption requests
 
 ---
 
@@ -793,11 +793,11 @@ await contract.submitMyContributionDecryption(campaignId, cleartext, decryptionP
 ### Key Improvements
 
 **vs Oracle-Based Decryption (v0.8):**
-- ⚡ **10-30x faster**: Instant decryption without gateway callbacks
-- 🔐 **More secure**: User-controlled with cryptographic proof verification
-- 👤 **Better UX**: Users sign and submit their own requests
-- 💰 **Lower cost**: Single-transaction flow, no oracle fees
-- 📊 **Transparent**: Status tracking via `get*Status()` functions
+- **10-30x faster**: Instant decryption without gateway callbacks
+- **More secure**: User-controlled with cryptographic proof verification
+- **Better UX**: Users sign and submit their own requests
+- **Lower cost**: Single-transaction flow, no oracle fees
+- **Transparent**: Status tracking via `get*Status()` functions
 
 **Status Management:**
 ```typescript
