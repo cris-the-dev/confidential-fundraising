@@ -260,40 +260,6 @@ This project leverages **FHEVM v0.9.1's self-relaying decryption** pattern, whic
 | **Cost** | Oracle relay fees + gas | Gas only | **Lower cost** |
 | **Status Tracking** | Limited visibility | NONE/PROCESSING/DECRYPTED states | **Better UX** |
 
-### FHE Operations Used
-
-The platform utilizes these FHEVM operations for encrypted computation:
-
-**Arithmetic Operations:**
-```solidity
-// Adding encrypted contributions
-euint64 newTotal = FHE.add(currentTotal, encryptedContribution);
-
-// Subtracting from encrypted balance
-euint64 newBalance = FHE.sub(balance, withdrawAmount);
-```
-
-**Comparison & Conditional Operations:**
-```solidity
-// Check if balance >= required amount
-ebool hasSufficient = FHE.ge(availableBalance, requiredAmount);
-
-// Conditional selection (ternary for encrypted values)
-euint64 lockAmount = FHE.select(hasSufficient, requiredAmount, FHE.asEuint64(0));
-```
-
-**Decryption Workflow:**
-```solidity
-// Step 1: Mark as publicly decryptable
-FHE.makePubliclyDecryptable(encryptedValue);
-
-// Step 4: Verify cryptographic proof
-bytes32[] memory handles = new bytes32[](1);
-handles[0] = FHE.toBytes32(encryptedValue);
-bytes memory cleartexts = abi.encode(cleartextValue);
-FHE.checkSignatures(handles, cleartexts, proof);  // Throws if invalid
-```
-
 ### Gas Optimization Strategies
 
 **1. Type Optimization**
@@ -1201,7 +1167,7 @@ The FHEVM Hardhat plugin provides mock FHE operations for local testing without 
 
 ## Future Roadmap
 
-### Phase 2: Enhanced Features (Q2 2025)
+### Phase 2: Enhanced Features
 
 1. **Milestone-Based Campaigns**
    - Unlock funds incrementally as milestones achieved
@@ -1219,7 +1185,7 @@ The FHEVM Hardhat plugin provides mock FHE operations for local testing without 
    - Encrypted contribution history
    - Privacy-preserving reputation scores
 
-### Phase 3: Scalability (Q3 2025)
+### Phase 3: Scalability
 
 1. **Layer 2 Integration**
    - Deploy to L2s with FHEVM support
@@ -1233,7 +1199,7 @@ The FHEVM Hardhat plugin provides mock FHE operations for local testing without 
    - Compressed encrypted handles
    - Off-chain metadata with on-chain verification
 
-### Phase 4: Advanced Privacy (Q4 2025)
+### Phase 4: Advanced Privacy
 
 1. **Anonymous Contributions**
    - Zero-knowledge proofs for contributor identity

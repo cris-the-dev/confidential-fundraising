@@ -16,8 +16,8 @@ export const metadata: Metadata = {
   description: 'Confidential fundraising platform powered by FHEVM and Zama',
   keywords: ['FHEVM', 'Privacy', 'Fundraising', 'Blockchain', 'Encryption'],
   icons: {
-      icon: 'logo.png',
-    },
+    icon: 'logo.png',
+  },
 };
 
 export default function RootLayout({
